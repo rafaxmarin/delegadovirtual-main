@@ -1,0 +1,38 @@
+# Archivos de configuración y credenciales sensibles (¡NUNCA SUBIR A GIT!)
+.env
+.env.local
+.env.*.local
+
+# Entornos virtuales de Python
+.venv/
+venv/
+env/
+ENV/
+build/
+dist/
+*.egg-info/
+
+# Archivos de caché de Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# Base de datos local SQLite
+*.db
+*.sqlite3
+delegado_virtual.db
+
+# Archivos de configuración de editores e IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Archivos del sistema operativo
+.DS_Store
+Thumbs.db
+
+# Archivos temporales generados (PDFs, Word, etc.)
+*.pdf
+*.docx

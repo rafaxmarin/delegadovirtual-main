@@ -1,0 +1,141 @@
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import ContextTypes
+from telegram.error import TelegramError
+
+async def estado_grupos(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Muestra el estado de los grupos registrados por el profesor"""
+    query = update.callback_query
+    await query.answer()
+    user = query.from_user
+    db = context.bot_data['db']
+    
+    grupos = db.obtener_grupos_profesor(user.id)
+    
+    if not grupos:
+        keyboard = [[InlineKeyboardButton("🔙 Volver al menú", callback_data="volver_menu")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(
+            "📊 *ESTADO DE LOS GRUPOS*\n\n"
+            "Aún no tienes grupos registrados.\n\n"
+            "Agrega el bot a un grupo de Telegram para comenzar.\n"
+            "Escribe /menu para volver.",
+            parse_mode='Markdown',
+            reply_markup=reply_markup
+        )
+        return
+    
+    mensaje = "📊 *ESTADO DE LOS GRUPOS*\n\n"
+    total_estudiantes = 0
+    
+    for chat_id, nombre in grupos:
+        try:
+            miembros = await context.bot.get_chat_member_count(chat_id)
+            estudiantes = miembros - 1  # Restar el bot
+            total_estudiantes += estudiantes
+            mensaje += f"📚 *{nombre}*: {estudiantes} estudiantes\n"
+        except TelegramError:
+            mensaje += f"📚 *{nombre}*: No se pudo obtener (bot no está en el grupo)\n"
+    
+    mensaje += f"\n📌 *Total de grupos:* {len(grupos)}"
+    mensaje += f"\n👥 *Total de estudiantes:* {total_estudiantes}"
+    
+    keyboard = [[InlineKeyboardButton("🔙 Volver al menú", callback_data="volver_menu")]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await query.edit_message_text(
+        mensaje,
+        parse_mode='Markdown',
+        reply_markup=reply_markup
+    )
+
+async def detectar_agregacion_grupo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Detecta cuando el bot es agregado a un grupo y notifica al profesor (CORREGIDO AUTO-EXPULSIÓN)"""
+    chat = update.effective_chat
+    user = update.effective_user
+    db = context.bot_data['db']
+    
+    if chat.type not in ['group', 'supergroup']:
+        return
+    
+    if not update.message:
+        return
+    
+    # 🔴 CORRECCIÓN CLAVE: Verificar si el nuevo miembro agregado es realmente EL BOT
+    bot_id = context.bot.id
+    nuevos_miembros = update.message.new_chat_members or []
+    bot_fue_agregado = any(member.id == bot_id for member in nuevos_miembros)
+    
+    # Si ingresó un estudiante común, NO hacer nada
+    if not bot_fue_agregado:
+        return
+    
+    # Si el bot fue agregado por alguien que NO es profesor verificado, salir del grupo
+    if not db.es_profesor_verificado(user.id):
+        await context.bot.send_message(
+            chat.id,
+            "❌ Este bot es exclusivo para profesores de la UDO Monagas. "
+            "Saliendo del grupo..."
+        )
+        await context.bot.leave_chat(chat.id)
+        return
+    
+    # Si fue agregado por un profesor verificado, enviar confirmación en privado
+    keyboard = [
+        [
+            InlineKeyboardButton("✅ Aceptar y registrar", callback_data=f"aceptar_grupo_{chat.id}"),
+            InlineKeyboardButton("❌ Rechazar y salir", callback_data=f"rechazar_grupo_{chat.id}")
+        ]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await context.bot.send_message(
+        user.id,
+        f"📢 El Delegado Virtual fue agregado a un nuevo grupo:\n\n"
+        f"*Nombre:* {chat.title}\n"
+        f"*ID:* {chat.id}\n\n"
+        "¿Qué deseas hacer?",
+        parse_mode='Markdown',
+        reply_markup=reply_markup
+    )
+
+async def manejar_respuesta_grupo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Maneja la aceptación o rechazo de un grupo"""
+    query = update.callback_query
+    await query.answer()
+    user = query.from_user
+    db = context.bot_data['db']
+    data = query.data
+    
+    if data.startswith("aceptar_grupo_"):
+        chat_id = int(data.replace("aceptar_grupo_", ""))
+        
+        try:
+            chat = await context.bot.get_chat(chat_id)
+            db.registrar_grupo(chat_id, chat.title, user.id)
+            
+            await query.edit_message_text(
+                f"✅ *Grupo registrado exitosamente*\n\n"
+                f"📚 *{chat.title}* ahora está bajo tu administración.",
+                parse_mode='Markdown'
+            )
+            
+            await context.bot.send_message(
+                chat_id,
+                "🤖 *Delegado Virtual activado*\n\n"
+                "Este grupo ahora está siendo administrado por el Delegado Virtual. "
+                "Tu profesor podrá enviar anuncios, material de estudio y más a través de este canal.\n\n"
+                "¡Mantengan el respeto y las normas de convivencia! 📚",
+                parse_mode='Markdown'
+            )
+        except Exception as e:
+            await query.edit_message_text(f"❌ Error al registrar el grupo: {str(e)}")
+    
+    elif data.startswith("rechazar_grupo_"):
+        chat_id = int(data.replace("rechazar_grupo_", ""))
+        
+        try:
+            await context.bot.leave_chat(chat_id)
+            await query.edit_message_text("✅ Has rechazado el grupo. El bot ha salido del mismo.")
+        except Exception as e:
+            await query.edit_message_text(f"❌ Error al salir del grupo: {str(e)}")
