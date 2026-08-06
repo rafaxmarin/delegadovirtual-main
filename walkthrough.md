@@ -1,6 +1,6 @@
-# Walkthrough - Refactorización a Clean Architecture
+# Walkthrough - Refactorización a Clean & Hexagonal Architecture
 
-Se ha completado con éxito la refactorización integral del proyecto **Delegado Virtual**, transformando la estructura monolítica plana en una **Clean Architecture (Arquitectura Limpia)** basada en capas y solucionando los 9 errores críticos detectados.
+Se ha completado con éxito la refactorización integral del proyecto **Delegado Virtual**, transformando la estructura monolítica plana en una combinación de **Clean Architecture y Arquitectura Hexagonal (Ports & Adapters)** basada en capas y solucionando los 9 errores críticos detectados.
 
 ---
 

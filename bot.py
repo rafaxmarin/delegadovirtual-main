@@ -24,7 +24,7 @@ def main():
         print("❌ TELEGRAM_BOT_TOKEN no encontrado. Revisa tu archivo .env")
         return
 
-    print("🤖 Iniciando Delegado Virtual (Refactorizado)...")
+    print(f"🤖 Iniciando {Config.APP_NAME} v{Config.VERSION} (Clean & Hexagonal Architecture)...")
     db = SQLiteRepository(Config.DATABASE_PATH)
     print("✅ Base de datos SQLite inicializada")
 

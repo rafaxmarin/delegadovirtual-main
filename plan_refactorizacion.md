@@ -1,6 +1,6 @@
-# Plan de Refactorización e Implementación - Delegado Virtual
+# Plan de Refactorización e Implementación - Clean & Hexagonal Architecture
 
-Este documento describe el plan detallado para refactorizar la base de código de **Delegado Virtual** hacia una **Arquitectura Limpia (Clean Architecture)**. Esta refactorización solucionará los 9 errores críticos detectados, garantizará la mantenibilidad del proyecto y facilitará futuras extensiones.
+Este documento describe el plan detallado para refactorizar la base de código de **Delegado Virtual** hacia una combinación de **Clean Architecture y Arquitectura Hexagonal (Ports & Adapters)**. Esta refactorización solucionará los 9 errores críticos detectados, garantizará la mantenibilidad del proyecto y facilitará futuras extensiones.
 
 ---
 

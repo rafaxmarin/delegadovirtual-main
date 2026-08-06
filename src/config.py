@@ -4,6 +4,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 class Config:
+    VERSION: str = "2.0.0"
+    APP_NAME: str = "Delegado Virtual"
     TELEGRAM_BOT_TOKEN: str = os.getenv('TELEGRAM_BOT_TOKEN', '')
     GEMINI_API_KEY: str = os.getenv('GEMINI_API_KEY', '')
     PROFESOR_PASSWORD: str = os.getenv('PROFESOR_PASSWORD', '')
