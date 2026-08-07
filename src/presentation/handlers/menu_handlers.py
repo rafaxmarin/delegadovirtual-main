@@ -3,31 +3,43 @@ from telegram.ext import ContextTypes
 from src.presentation.keyboards import get_menu_keyboard
 
 async def menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Maneja el comando /menu"""
+    """Maneja el comando /menu y despliega el menú principal (Soporta callback y message)"""
     user = update.effective_user
     db = context.bot_data['db']
     
     if not db.es_profesor_verificado(user.id):
-        await update.message.reply_text(
-            "🔒 Debes verificar tu acceso de profesor primero. Usa /start para comenzar."
-        )
+        texto_error = "🔒 Debes verificar tu acceso de profesor primero. Usa /start para comenzar."
+        if update.callback_query:
+            await update.callback_query.message.reply_text(texto_error)
+        elif update.message:
+            await update.message.reply_text(texto_error)
         return
     
-    await update.message.reply_text(
+    texto_menu = (
         "📋 *MENÚ PRINCIPAL - Delegado Virtual*\n\n"
-        "Selecciona la función que deseas utilizar:",
-        parse_mode='Markdown',
-        reply_markup=get_menu_keyboard()
+        "Selecciona la función que deseas utilizar:"
     )
+    
+    if update.callback_query:
+        try:
+            await update.callback_query.edit_message_text(
+                texto_menu,
+                parse_mode='Markdown',
+                reply_markup=get_menu_keyboard()
+            )
+        except Exception:
+            await update.callback_query.message.reply_text(
+                texto_menu,
+                parse_mode='Markdown',
+                reply_markup=get_menu_keyboard()
+            )
+    elif update.message:
+        await update.message.reply_text(
+            texto_menu,
+            parse_mode='Markdown',
+            reply_markup=get_menu_keyboard()
+        )
 
 async def volver_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Vuelve al menú principal desde un callback button"""
-    query = update.callback_query
-    await query.answer()
-    
-    await query.edit_message_text(
-        "📋 *MENÚ PRINCIPAL - Delegado Virtual*\n\n"
-        "Selecciona la función que deseas utilizar:",
-        parse_mode='Markdown',
-        reply_markup=get_menu_keyboard()
-    )
+    """Vuelve al menú principal desde un callback button y limpia el estado activo"""
+    await menu(update, context)

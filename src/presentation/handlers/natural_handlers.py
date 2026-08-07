@@ -33,6 +33,13 @@ async def procesar_mensaje_natural(update: Update, context: ContextTypes.DEFAULT
         await message.reply_text("🔒 Usa /start para verificar tu acceso como profesor.")
         return
     
+    texto = message.text.strip() if message.text else ""
+    if texto.lower() in ['cancelar', 'cancel', 'salir']:
+        context.user_data.clear()
+        from src.presentation.handlers.menu_handlers import menu
+        await menu(update, context)
+        return
+
     # Verificar flujos activos en orden
     if context.user_data.get('creando_recaudacion'):
         await procesar_recaudacion(update, context)
@@ -64,12 +71,6 @@ async def procesar_mensaje_natural(update: Update, context: ContextTypes.DEFAULT
     
     if context.user_data.get('respondiendo_asesoria'):
         await recibir_respuesta_asesoria(update, context)
-        return
-    
-    texto = message.text.strip() if message.text else ""
-    if texto.lower() in ['cancelar', 'cancel', 'salir']:
-        context.user_data.clear()
-        await message.reply_text("✅ Cancelado. Usa /menu.")
         return
     
     if not texto:

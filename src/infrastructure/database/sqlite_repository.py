@@ -138,6 +138,11 @@ class SQLiteRepository:
     def es_grupo_registrado(self, chat_id: int) -> bool:
         self.cursor.execute('SELECT 1 FROM grupos WHERE chat_id = ?', (chat_id,))
         return self.cursor.fetchone() is not None
+
+    def obtener_profesor_de_grupo(self, chat_id: int) -> Optional[int]:
+        self.cursor.execute('SELECT profesor_id FROM grupos WHERE chat_id = ?', (chat_id,))
+        res = self.cursor.fetchone()
+        return res[0] if res else None
     
     def eliminar_grupo(self, chat_id: int):
         self.cursor.execute('DELETE FROM grupos WHERE chat_id = ?', (chat_id,))
@@ -231,7 +236,7 @@ class SQLiteRepository:
     
     def obtener_asesorias_pendientes(self, profesor_id: int) -> List[Tuple]:
         self.cursor.execute('''
-            SELECT a.id, a.grupo_nombre, a.estudiante_nombre, a.pregunta
+            SELECT a.id, a.grupo_nombre, a.estudiante_nombre, a.pregunta, a.grupo_id
             FROM asesorias a
             JOIN grupos g ON a.grupo_id = g.chat_id
             WHERE g.profesor_id = ? AND a.respondida = 0

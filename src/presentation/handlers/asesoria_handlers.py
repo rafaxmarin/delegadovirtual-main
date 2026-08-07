@@ -6,33 +6,30 @@ gemini = GeminiAdapter()
 
 async def buzon_asesoria(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Muestra el buzón de asesoría al profesor"""
-    query = update.callback_query
-    await query.answer()
-    user = query.from_user
+    user = update.effective_user
     db = context.bot_data['db']
+
+    if update.callback_query:
+        await update.callback_query.answer()
     
     solicitudes = db.obtener_asesorias_pendientes(user.id)
     
     if not solicitudes:
-        keyboard = [[InlineKeyboardButton("🔙 Volver al menú", callback_data="volver_menu")]]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        await query.edit_message_text(
-            "📬 *BUZÓN DE ASESORÍA*\n\n"
-            "No tienes solicitudes pendientes.\n\n"
-            "Los estudiantes pueden etiquetar al bot en el grupo "
-            "para hacer preguntas que te llegarán aquí.",
-            parse_mode='Markdown',
-            reply_markup=reply_markup
-        )
+        from src.presentation.handlers.menu_handlers import menu
+        await menu(update, context)
         return
     
-    mensaje = "📬 *BUZÓN DE ASESORÍA - Solicitudes pendientes*\n\n"
+    mensaje = f"📬 *BUZÓN DE ASESORÍA - Solicitudes pendientes ({len(solicitudes)})*\n\n"
     keyboard = []
-    for solicitud_id, grupo_nombre, estudiante, pregunta in solicitudes:
+    for sol in solicitudes:
+        solicitud_id = sol[0]
+        grupo_nombre = sol[1]
+        estudiante = sol[2]
+        pregunta = sol[3]
+        
         mensaje += (
             f"📚 *{grupo_nombre}*\n"
-            f"👤 {estudiante}\n"
+            f"👤 *{estudiante}*\n"
             f"💬 {pregunta}\n\n"
         )
         keyboard.append([
@@ -43,7 +40,7 @@ async def buzon_asesoria(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ])
         keyboard.append([
             InlineKeyboardButton(
-                f"❌ Ignorar",
+                f"❌ Ignorar a {estudiante}",
                 callback_data=f"ignorar_asesoria_{solicitud_id}"
             )
         ])
@@ -51,11 +48,10 @@ async def buzon_asesoria(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard.append([InlineKeyboardButton("🔙 Volver al menú", callback_data="volver_menu")])
     reply_markup = InlineKeyboardMarkup(keyboard)
     
-    await query.edit_message_text(
-        mensaje,
-        parse_mode='Markdown',
-        reply_markup=reply_markup
-    )
+    if update.callback_query:
+        await update.callback_query.edit_message_text(mensaje, parse_mode='Markdown', reply_markup=reply_markup)
+    elif update.message:
+        await update.message.reply_text(mensaje, parse_mode='Markdown', reply_markup=reply_markup)
 
 async def responder_asesoria(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Prepara la respuesta a una solicitud de asesoría"""
@@ -75,76 +71,148 @@ async def responder_asesoria(update: Update, context: ContextTypes.DEFAULT_TYPE)
     context.user_data['respondiendo_asesoria'] = solicitud_id
     context.user_data['asesoria_grupo'] = solicitud[1]
     context.user_data['asesoria_estudiante'] = solicitud[2]
+    context.user_data['asesoria_pregunta'] = solicitud[3]
+    context.user_data['asesoria_grupo_id'] = solicitud[4] if len(solicitud) > 4 else None
     
     keyboard = [[InlineKeyboardButton("🔙 Cancelar", callback_data="volver_menu")]]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
     await query.edit_message_text(
         f"💬 *Responder a {solicitud[2]}*\n\n"
-        f"Pregunta: {solicitud[3]}\n\n"
-        "Escribe tu respuesta (texto o nota de voz).\n"
-        "El bot la estructurará de manera formal.",
+        f"❓ *Pregunta:* \"{solicitud[3]}\"\n\n"
+        "Escribe la respuesta que deseas enviar a tu estudiante.",
         parse_mode='Markdown',
         reply_markup=reply_markup
     )
 
 async def recibir_respuesta_asesoria(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Recibe y envía la respuesta del profesor"""
+    """Recibe y envía la respuesta exacta del profesor al grupo"""
     if not context.user_data.get('respondiendo_asesoria'):
         return
     
-    respuesta = update.message.text
-    if not respuesta:
+    if not update.message or not update.message.text:
         return
     
+    respuesta_profesor = update.message.text.strip()
     solicitud_id = context.user_data.get('respondiendo_asesoria')
     grupo_nombre = context.user_data.get('asesoria_grupo')
     estudiante = context.user_data.get('asesoria_estudiante')
+    pregunta = context.user_data.get('asesoria_pregunta', '')
+    grupo_id = context.user_data.get('asesoria_grupo_id')
     db = context.bot_data['db']
     
-    try:
-        respuesta_formal = gemini.estructurar_texto_formal(respuesta)
-    except Exception:
-        respuesta_formal = respuesta
-    
-    try:
+    if not grupo_id:
         grupos = db.obtener_grupos_profesor(update.effective_user.id)
         grupo_id = next((chat_id for chat_id, nombre in grupos if nombre == grupo_nombre), None)
+    
+    if not grupo_id:
+        await update.message.reply_text("❌ No se encontró el grupo correspondiente.")
+        return
+    
+    try:
+        await context.bot.send_message(
+            grupo_id,
+            f"💬 *RESPUESTA DE ASESORÍA DEL PROFESOR*\n\n"
+            f"👤 *Para:* {estudiante}\n"
+            f"❓ *Pregunta:* \"{pregunta}\"\n\n"
+            f"✍️ *Respuesta:* {respuesta_profesor}",
+            parse_mode='Markdown'
+        )
         
-        if grupo_id:
-            await context.bot.send_message(
-                grupo_id,
-                f"💬 *RESPUESTA DEL PROFESOR*\n\n"
-                f"👤 Para: {estudiante}\n\n"
-                f"{respuesta_formal}",
-                parse_mode='Markdown'
-            )
-            db.marcar_asesoria_respondida(solicitud_id)
-            await update.message.reply_text(f"✅ Respuesta enviada a {estudiante} en {grupo_nombre}.")
-        else:
-            await update.message.reply_text("❌ No se encontró el grupo.")
+        db.marcar_asesoria_respondida(solicitud_id)
+        await update.message.reply_text(f"✅ Respuesta enviada exitosamente a {estudiante} en {grupo_nombre}.")
+        
+        # Reabrir el buzón de asesoría automáticamente para listar las demás preguntas
+        await buzon_asesoria(update, context)
+        
     except Exception as e:
-        await update.message.reply_text(f"❌ Error al enviar la respuesta: {str(e)}")
+        await update.message.reply_text(f"❌ Error al enviar la respuesta al grupo: {str(e)}")
     
     context.user_data.pop('respondiendo_asesoria', None)
     context.user_data.pop('asesoria_grupo', None)
     context.user_data.pop('asesoria_estudiante', None)
+    context.user_data.pop('asesoria_pregunta', None)
+    context.user_data.pop('asesoria_grupo_id', None)
 
 async def ignorar_asesoria(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Ignora una solicitud de asesoría"""
     query = update.callback_query
-    await query.answer()
+    await query.answer("Solicitud ignorada.")
     
     solicitud_id = int(query.data.replace("ignorar_asesoria_", ""))
     db = context.bot_data['db']
     
     db.marcar_asesoria_respondida(solicitud_id)
-    await query.edit_message_text("✅ Solicitud ignorada.")
     await buzon_asesoria(update, context)
 
 
+async def enviar_pregunta_asesoria(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Procesa el comando /pregunta enviado por un estudiante en un grupo"""
+    chat = update.effective_chat
+    user = update.effective_user
+    message = update.message
+    db = context.bot_data['db']
+
+    if chat.type not in ['group', 'supergroup']:
+        await message.reply_text("ℹ️ El comando /pregunta se utiliza dentro de un grupo de clase.")
+        return
+
+    if not db.es_grupo_registrado(chat.id):
+        print(f"⚠️ El grupo '{chat.title}' (ID: {chat.id}) NO está registrado en la base de datos.")
+        await message.reply_text(
+            "⚠️ Este grupo aún no está registrado por ningún profesor.\n"
+            "El profesor debe invitar al bot y confirmar el registro por mensaje privado."
+        )
+        return
+
+    pregunta = " ".join(context.args).strip() if context.args else ""
+    if not pregunta and message and message.text:
+        partes = message.text.split(maxsplit=1)
+        if len(partes) > 1:
+            pregunta = partes[1].strip()
+
+    if not pregunta:
+        await message.reply_text(
+            "❓ *¿Cómo hacer una pregunta al profesor?*\n\n"
+            "Escribe el comando `/pregunta` seguido de tu duda.\n\n"
+            "Ejemplo:\n"
+            "`/pregunta ¿Cuándo es la fecha de entrega del examen final?`",
+            parse_mode='Markdown'
+        )
+        return
+
+    contador = db.obtener_contador_asesorias(chat.id)
+    if contador >= 10:
+        await message.reply_text("❌ Se ha alcanzado el límite de 10 solicitudes por hoy. Intenta de nuevo mañana.")
+        return
+
+    db.agregar_asesoria(chat.id, chat.title or "Grupo", user.full_name, pregunta)
+    db.incrementar_contador_asesorias(chat.id)
+    print(f"✅ Asesoría recibida vía /pregunta: '{pregunta}' en grupo '{chat.title}'")
+
+    await message.reply_text(
+        f"✅ Tu pregunta ha sido enviada al profesor.\n"
+        f"Solicitudes hoy: {contador + 1}/10"
+    )
+
+    profesor_id = db.obtener_profesor_de_grupo(chat.id)
+    if profesor_id:
+        try:
+            await context.bot.send_message(
+                profesor_id,
+                f"📬 *NUEVA SOLICITUD DE ASESORÍA*\n\n"
+                f"📚 *Grupo:* {chat.title}\n"
+                f"👤 *Estudiante:* {user.full_name}\n"
+                f"💬 *Pregunta:* {pregunta}\n\n"
+                f"💡 Revisa tu buzón de asesorías en /menu",
+                parse_mode='Markdown'
+            )
+            print(f"🔔 Notificación privada enviada al profesor ID {profesor_id}")
+        except Exception as e:
+            print(f"❌ No se pudo enviar notificación privada al profesor: {e}")
+
 async def detectar_solicitud_estudiante(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Detecta cuando un estudiante etiqueta al bot en un grupo (CORREGIDO ES_GRUPO_REGISTRADO)"""
+    """Detecta cuando un estudiante etiqueta al bot en un grupo y notifica al profesor"""
     chat = update.effective_chat
     user = update.effective_user
     message = update.message
@@ -157,11 +225,23 @@ async def detectar_solicitud_estudiante(update: Update, context: ContextTypes.DE
         return
     
     bot_username = context.bot.username
-    if f"@{bot_username}" not in message.text:
+    if not bot_username:
         return
     
-    # 🔴 CORRECCIÓN: Verificar registro de grupo adecuadamente
+    # Búsqueda insensible a mayúsculas/minúsculas del @bot_username
+    if f"@{bot_username}".lower() not in message.text.lower():
+        from src.presentation.handlers.strike_handlers import monitorear_mensajes
+        await monitorear_mensajes(update, context)
+        return
+    
+    print(f"📩 Detectada mención a @{bot_username} en grupo '{chat.title}' (ID: {chat.id}) por {user.full_name}")
+
     if not db.es_grupo_registrado(chat.id):
+        print(f"⚠️ El grupo '{chat.title}' (ID: {chat.id}) NO está registrado en la base de datos.")
+        await message.reply_text(
+            "⚠️ Este grupo aún no está registrado por ningún profesor.\n"
+            "El profesor debe invitar al bot y confirmar el registro por mensaje privado."
+        )
         return
     
     contador = db.obtener_contador_asesorias(chat.id)
@@ -169,18 +249,38 @@ async def detectar_solicitud_estudiante(update: Update, context: ContextTypes.DE
         await message.reply_text("❌ Se ha alcanzado el límite de 10 solicitudes por hoy. Intenta de nuevo mañana.")
         return
     
-    pregunta = message.text.replace(f"@{bot_username}", "").strip()
+    # Remover la mención del bot sin importar mayúsculas/minúsculas
+    import re
+    pregunta = re.sub(re.escape(f"@{bot_username}"), "", message.text, flags=re.IGNORECASE).strip()
     if not pregunta:
-        await message.reply_text("Por favor, escribe tu pregunta después de etiquetarme.")
+        await message.reply_text("Por favor, escribe tu pregunta después de etiquetarme o usa /pregunta.")
         return
     
     db.agregar_asesoria(chat.id, chat.title or "Grupo", user.full_name, pregunta)
     db.incrementar_contador_asesorias(chat.id)
+    print(f"✅ Asesoría guardada exitosamente en DB: '{pregunta}' para el grupo '{chat.title}'")
     
     await message.reply_text(
         f"✅ Tu pregunta ha sido enviada al profesor.\n"
         f"Solicitudes hoy: {contador + 1}/10"
     )
+    
+    # 🔔 NOTIFICACIÓN INSTANTÁNEA PRIVADA AL PROFESOR
+    profesor_id = db.obtener_profesor_de_grupo(chat.id)
+    if profesor_id:
+        try:
+            await context.bot.send_message(
+                profesor_id,
+                f"📬 *NUEVA SOLICITUD DE ASESORÍA*\n\n"
+                f"📚 *Grupo:* {chat.title}\n"
+                f"👤 *Estudiante:* {user.full_name}\n"
+                f"💬 *Pregunta:* {pregunta}\n\n"
+                f"💡 Revisa tu buzón de asesorías en /menu",
+                parse_mode='Markdown'
+            )
+            print(f"🔔 Notificación privada enviada al profesor ID {profesor_id}")
+        except Exception as e:
+            print(f"❌ No se pudo enviar notificación privada al profesor: {e}")
 
 async def enviar_recordatorio_asesoria(context: ContextTypes.DEFAULT_TYPE):
     """Envía recordatorio cada 48 horas a los grupos registrados"""

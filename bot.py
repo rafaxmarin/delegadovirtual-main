@@ -9,7 +9,7 @@ from src.presentation.handlers.menu_handlers import menu, volver_menu
 from src.presentation.handlers.grupo_handlers import estado_grupos, detectar_agregacion_grupo, manejar_respuesta_grupo
 from src.presentation.handlers.recaudacion_handlers import iniciar_recaudacion, procesar_recaudacion, confirmar_recaudacion, enviar_recaudacion, validar_comprobante
 from src.presentation.handlers.minuta_handlers import redactar_minuta, recibir_contenido_minuta, generar_minuta_formato, enviar_minuta_grupo, despachar_minuta
-from src.presentation.handlers.asesoria_handlers import buzon_asesoria, responder_asesoria, ignorar_asesoria, detectar_solicitud_estudiante, enviar_recordatorio_asesoria
+from src.presentation.handlers.asesoria_handlers import buzon_asesoria, responder_asesoria, ignorar_asesoria, detectar_solicitud_estudiante, enviar_recordatorio_asesoria, enviar_pregunta_asesoria
 from src.presentation.handlers.strike_handlers import control_strikes, ver_historial_strikes, monitorear_mensajes
 from src.presentation.handlers.alumno_handlers import agregar_alumno, invitar_alumno_grupo, eliminar_alumno, listar_estudiantes_grupo, confirmar_eliminar_alumno
 from src.presentation.handlers.material_handlers import compartir_material, confirmar_material, enviar_material
@@ -34,6 +34,7 @@ def main():
     # COMANDOS
     application.add_handler(CommandHandler('start', start))
     application.add_handler(CommandHandler('menu', menu))
+    application.add_handler(CommandHandler('pregunta', enviar_pregunta_asesoria))
 
     # CALLBACKS DEL MENÚ Y NAVEGACIÓN
     application.add_handler(CallbackQueryHandler(button_auth, pattern='^(soy_profesor|no_profesor)$'))
@@ -87,7 +88,7 @@ def main():
 
     # MENSAJES EN GRUPOS
     application.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, detectar_agregacion_grupo))
-    application.add_handler(MessageHandler(filters.TEXT & filters.Entity('mention'), detectar_solicitud_estudiante))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.ChatType.GROUPS & filters.Regex(r'(?i)@'), detectar_solicitud_estudiante))
     application.add_handler(MessageHandler(filters.PHOTO, validar_comprobante))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.ChatType.GROUPS, monitorear_mensajes))
 
