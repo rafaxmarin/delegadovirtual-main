@@ -38,3 +38,17 @@ def get_auth_keyboard() -> InlineKeyboardMarkup:
 def get_cancel_keyboard(callback_data: str = "volver_menu") -> InlineKeyboardMarkup:
     keyboard = [[InlineKeyboardButton("🔙 Cancelar", callback_data=callback_data)]]
     return InlineKeyboardMarkup(keyboard)
+
+def get_grupos_list_keyboard(grupos: list) -> InlineKeyboardMarkup:
+    keyboard = []
+    for chat_id, nombre in grupos:
+        keyboard.append([InlineKeyboardButton(f"📚 {nombre}", callback_data=f"detalle_grupo_{chat_id}")])
+    keyboard.append([InlineKeyboardButton("🔙 Volver al menú", callback_data="volver_menu")])
+    return InlineKeyboardMarkup(keyboard)
+
+def get_grupo_detalle_keyboard() -> InlineKeyboardMarkup:
+    keyboard = [
+        [InlineKeyboardButton("🔙 Volver a la lista de grupos", callback_data="menu_estado_grupos")],
+        [InlineKeyboardButton("🏠 Volver al menú principal", callback_data="volver_menu")]
+    ]
+    return InlineKeyboardMarkup(keyboard)

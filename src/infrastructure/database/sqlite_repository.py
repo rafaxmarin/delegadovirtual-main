@@ -143,6 +143,10 @@ class SQLiteRepository:
         self.cursor.execute('SELECT profesor_id FROM grupos WHERE chat_id = ?', (chat_id,))
         res = self.cursor.fetchone()
         return res[0] if res else None
+
+    def obtener_grupo(self, chat_id: int) -> Optional[Tuple[int, str]]:
+        self.cursor.execute('SELECT chat_id, nombre FROM grupos WHERE chat_id = ?', (chat_id,))
+        return self.cursor.fetchone()
     
     def eliminar_grupo(self, chat_id: int):
         self.cursor.execute('DELETE FROM grupos WHERE chat_id = ?', (chat_id,))

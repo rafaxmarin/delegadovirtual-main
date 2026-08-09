@@ -1,9 +1,10 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 from telegram.error import TelegramError
+from src.presentation.keyboards import get_grupos_list_keyboard, get_grupo_detalle_keyboard
 
 async def estado_grupos(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Muestra el estado de los grupos registrados por el profesor"""
+    """Muestra la lista de grupos registrados por el profesor (Paso 1)"""
     query = update.callback_query
     await query.answer()
     user = query.from_user
@@ -25,28 +26,54 @@ async def estado_grupos(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
     
-    mensaje = "📊 *ESTADO DE LOS GRUPOS*\n\n"
-    total_estudiantes = 0
-    
-    for chat_id, nombre in grupos:
-        try:
-            miembros = await context.bot.get_chat_member_count(chat_id)
-            estudiantes = miembros - 1  # Restar el bot
-            total_estudiantes += estudiantes
-            mensaje += f"📚 *{nombre}*: {estudiantes} estudiantes\n"
-        except TelegramError:
-            mensaje += f"📚 *{nombre}*: No se pudo obtener (bot no está en el grupo)\n"
-    
-    mensaje += f"\n📌 *Total de grupos:* {len(grupos)}"
-    mensaje += f"\n👥 *Total de estudiantes:* {total_estudiantes}"
-    
-    keyboard = [[InlineKeyboardButton("🔙 Volver al menú", callback_data="volver_menu")]]
-    reply_markup = InlineKeyboardMarkup(keyboard)
+    mensaje = (
+        "📊 *ESTADO DE LOS GRUPOS*\n\n"
+        f"Tienes *{len(grupos)}* grupo(s) registrado(s).\n"
+        "Selecciona un grupo para ver la cantidad de estudiantes que lo integran:"
+    )
     
     await query.edit_message_text(
         mensaje,
         parse_mode='Markdown',
-        reply_markup=reply_markup
+        reply_markup=get_grupos_list_keyboard(grupos)
+    )
+
+async def detalle_grupo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Muestra la información detallada de un grupo específico (Paso 2)"""
+    query = update.callback_query
+    await query.answer()
+    db = context.bot_data['db']
+    
+    try:
+        chat_id = int(query.data.replace("detalle_grupo_", ""))
+    except ValueError:
+        await query.edit_message_text(
+            "❌ Identificador de grupo no válido.",
+            reply_markup=get_grupo_detalle_keyboard()
+        )
+        return
+        
+    grupo = db.obtener_grupo(chat_id)
+    nombre_grupo = grupo[1] if grupo else "Grupo"
+    
+    try:
+        miembros = await context.bot.get_chat_member_count(chat_id)
+        estudiantes = miembros - 1  # Restar el bot
+        info_estudiantes = f"👥 *Estudiantes integrando el grupo:* {estudiantes}"
+    except TelegramError:
+        info_estudiantes = "⚠️ *Estado:* No se pudo obtener la información (el bot no está en el grupo o no tiene permisos)."
+    
+    mensaje = (
+        f"📊 *DETALLE DEL GRUPO*\n\n"
+        f"📚 *Nombre del grupo:* {nombre_grupo}\n"
+        f"{info_estudiantes}\n"
+        f"🆔 *ID del grupo:* `{chat_id}`"
+    )
+    
+    await query.edit_message_text(
+        mensaje,
+        parse_mode='Markdown',
+        reply_markup=get_grupo_detalle_keyboard()
     )
 
 async def detectar_agregacion_grupo(update: Update, context: ContextTypes.DEFAULT_TYPE):
