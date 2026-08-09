@@ -86,11 +86,11 @@ class GeminiAdapter:
     def validar_comprobante_contra_recaudacion(self, image_input: Union[bytes, Image.Image], datos_recaudacion: dict) -> dict:
         """
         Analiza un comprobante de pago con Gemini Vision y lo valida contra los parámetros requeridos.
-        Verifica explícitamente que el banco destino coincida con el registrado por el profesor.
+        Optimizado para comprobantes bancarios venezolanos (BDV / PagomóvilBDV, Banesco, Mercantil, Provincial, etc.).
         """
         import json, re
         prompt = f"""
-        Analiza esta imagen de captura/comprobante de pago móvil o transferencia bancaria y evalúa si cumple los requisitos de la recaudación.
+        Analiza esta captura/comprobante de pago móvil o transferencia bancaria (ej. PagomóvilBDV, Banesco, Mercantil, etc.) y evalúa si cumple los requisitos de la recaudación.
 
         Parámetros requeridos por la recaudación:
         - Concepto: {datos_recaudacion.get('concepto', '')}
@@ -99,27 +99,35 @@ class GeminiAdapter:
         - Cédula destino esperada: {datos_recaudacion.get('cedula', '')}
         - Teléfono destino esperado: {datos_recaudacion.get('telefono', '')}
 
-        Instrucciones de verificación:
-        1. Extrae:
-           - Nombre/Apellido del pagador o titular de la cuenta origen
-           - Número de referencia / verificación / transacción
-           - Monto pagado
-           - Banco destino o banco receptor indicado en el comprobante
-           - Fecha y hora de la transacción
-        2. Requisitos obligatorios para declarar "valido": true:
-           - El banco destino de la captura DEBE coincidir o pertenecer al mismo banco/entidad que {datos_recaudacion.get('banco', '')}.
-           - El monto detectado DEBE ser igual o mayor al monto esperado (Bs. {datos_recaudacion.get('monto', 0)}).
-           - Debe ser visible un número de referencia/verificación válido.
-        3. Si algún requisito falla (por ejemplo, banco destino distinto, monto insuficiente, imagen ilegible o no es un comprobante), coloca "valido": false y explica la razón exacta en "motivo_rechazo".
+        Guía de lectura para comprobantes (especialmente PagomóvilBDV / Banco de Venezuela):
+        1. "Operación": Corresponde al número de referencia / comprobante de la transacción (ej. 006852001890).
+        2. Recuadro de Monto: Indica la cantidad en Bs. (ej. "497,69 Bs" o "500,00 Bs"). Ten en cuenta los decimales con coma.
+        3. "Banco": Es el banco destino o receptor (ej. "0102 - BANCO DE VENEZUELA", "Mercantil", "Banesco", etc.).
+           Nota de equivalencia de bancos: "BDV", "Banco de Venezuela" y "0102" son la misma entidad. Lo mismo aplica para otros bancos por su código o nombre.
+        4. "Destino": Es el número de teléfono del beneficiario.
+        5. "Identificación": Es el número de cédula/R纳入.
 
-        Responde EXCLUSIVAMENTE en formato JSON sin formato markdown extra:
+        Instrucciones de evaluación:
+        1. Extrae:
+           - Nombre/titular origen (o usa el concepto si el nombre no es visible)
+           - Número de Operación / Referencia
+           - Monto pagado en Bs (convertir a número flotante, ej 497.69)
+           - Banco destino detectado
+           - Fecha y hora de la operación (ej. 31/07/2026)
+        2. Requisitos de validez ("valido": true):
+           - El banco destino DEBE coincidir con {datos_recaudacion.get('banco', '')} (considerando alias equivalentes como BDV = Banco de Venezuela = 0102).
+           - El monto detectado DEBE ser igual o mayor al monto esperado (Bs. {datos_recaudacion.get('monto', 0)}).
+           - El número de operación/referencia debe ser legible.
+        3. Si no cumple alguno de estos requisitos, marca "valido": false y explica la causa exacta en "motivo_rechazo".
+
+        Responde EXCLUSIVAMENTE en formato JSON:
         {{
           "valido": true,
           "nombre_pagador": "Nombre del pagador",
-          "numero_verificacion": "123456",
-          "monto_detectado": 120.0,
-          "banco_detectado": "Nombre del banco destino detectado",
-          "fecha_pago": "DD/MM/AAAA HH:MM",
+          "numero_verificacion": "006852001890",
+          "monto_detectado": 497.69,
+          "banco_detectado": "BANCO DE VENEZUELA",
+          "fecha_pago": "31/07/2026",
           "motivo_rechazo": ""
         }}
         """
