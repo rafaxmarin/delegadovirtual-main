@@ -16,8 +16,13 @@ async def buzon_asesoria(update: Update, context: ContextTypes.DEFAULT_TYPE):
     solicitudes = db.obtener_asesorias_pendientes(user.id)
     
     if not solicitudes:
-        from src.presentation.handlers.menu_handlers import menu
-        await menu(update, context)
+        mensaje = "📬 *BUZÓN DE ASESORÍA*\n\n✅ No tienes solicitudes de asesoría pendientes."
+        keyboard = [[InlineKeyboardButton("🔙 Volver al menú", callback_data="volver_menu")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        if update.callback_query:
+            await update.callback_query.edit_message_text(mensaje, parse_mode='Markdown', reply_markup=reply_markup)
+        elif update.message:
+            await update.message.reply_text(mensaje, parse_mode='Markdown', reply_markup=reply_markup)
         return
     
     mensaje = f"📬 *BUZÓN DE ASESORÍA - Solicitudes pendientes ({len(solicitudes)})*\n\n"
