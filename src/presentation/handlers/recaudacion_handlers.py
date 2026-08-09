@@ -346,10 +346,24 @@ async def actualizar_lista_en_vivo(bot, chat_id: int, db, rec_id: int, concepto:
             print(f"⚠️ No se pudo publicar nuevo mensaje de lista en vivo: {e}")
 
 async def validar_comprobante(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Valida la captura enviada en el grupo (soporta fotos e imágenes/screenshots enviadas como archivos)"""
+    """Valida la captura enviada en el grupo (soporta fotos e imágenes enviadas directamente o con el comando /pago)"""
     if not update.message:
         return
     
+    chat_type = update.effective_chat.type
+    chat_id = update.effective_chat.id
+    user = update.effective_user
+    estudiante_nombre = user.full_name or (f"@{user.username}" if user.username else "Estudiante")
+
+    # Si se envía por chat privado
+    if chat_type == 'private':
+        await update.message.reply_text(
+            "📌 *Por favor envía tu comprobante de pago directamente en el grupo de tu materia* donde está el bot para que sea validado y registrado en la lista pública.",
+            parse_mode='Markdown',
+            reply_to_message_id=update.message.message_id
+        )
+        return
+
     photo_file_id = None
     if update.message.photo:
         photo_file_id = update.message.photo[-1].file_id
@@ -361,11 +375,13 @@ async def validar_comprobante(update: Update, context: ContextTypes.DEFAULT_TYPE
             photo_file_id = doc.file_id
     
     if not photo_file_id:
+        if update.message.text and '/pago' in update.message.text:
+            await update.message.reply_text(
+                "📸 *Por favor adjunta la imagen/captura de tu comprobante de pago* al usar el comando `/pago`.",
+                parse_mode='Markdown',
+                reply_to_message_id=update.message.message_id
+            )
         return
-
-    chat_id = update.effective_chat.id
-    user = update.effective_user
-    estudiante_nombre = user.full_name or (f"@{user.username}" if user.username else "Estudiante")
 
     print(f"📸 Imagen/Comprobante recibido de {estudiante_nombre} en chat ID: {chat_id}")
 
@@ -375,6 +391,12 @@ async def validar_comprobante(update: Update, context: ContextTypes.DEFAULT_TYPE
     rec_tuple = db.obtener_recaudacion_activa(chat_id)
     if not rec_tuple:
         print(f"⚠️ El chat {chat_id} no tiene una recaudación activa en la base de datos.")
+        await update.message.reply_text(
+            "⚠️ *No hay ninguna recaudación activa en este grupo en este momento.*\n\n"
+            "El profesor aún no ha creado ni publicado un proceso de cobro activo para este grupo.",
+            parse_mode='Markdown',
+            reply_to_message_id=update.message.message_id
+        )
         return
     
     # Extraer campos de recaudación
@@ -574,3 +596,57 @@ async def verificar_fechas_limite_job(context: ContextTypes.DEFAULT_TYPE):
 
         except Exception as e:
             print(f"⚠️ Error en revisión de fecha límite para recaudación {rec[0]}: {e}")
+
+async def consultar_recaudacion_comando(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Muestra la información de la recaudación activa en el grupo al ejecutar /recaudacion"""
+    if not update.message:
+        return
+
+    chat_id = update.effective_chat.id
+    chat_type = update.effective_chat.type
+    db = context.bot_data['db']
+
+    if chat_type == 'private':
+        await update.message.reply_text(
+            "📌 *El comando /recaudacion debe usarse dentro del grupo de tu materia* para consultar la información del cobro activo.",
+            parse_mode='Markdown',
+            reply_to_message_id=update.message.message_id
+        )
+        return
+
+    rec_tuple = db.obtener_recaudacion_activa(chat_id)
+    if not rec_tuple:
+        await update.message.reply_text(
+            "⚠️ *No hay ninguna recaudación activa en este grupo en este momento.*\n\n"
+            "El profesor aún no ha creado ni publicado un proceso de cobro para este grupo.",
+            parse_mode='Markdown',
+            reply_to_message_id=update.message.message_id
+        )
+        return
+
+    rec_id, profesor_id, g_id, concepto, monto, banco, cedula, telefono, fecha_limite, activa = rec_tuple[:10]
+    monto = float(monto)
+
+    pagos = db.obtener_pagos_recaudacion(rec_id)
+    total_pagados = len(pagos)
+
+    mensaje_info = (
+        f"💸 *RECAUDACIÓN ACTIVA DEL GRUPO*\n\n"
+        f"📝 *Concepto:* {concepto}\n"
+        f"💵 *Monto requerimiento:* Bs. {monto:,.2f}\n\n"
+        f"💳 *DATOS DE PAGO MÓVIL (DESTINO):*\n"
+        f"🏦 *Banco:* {banco}\n"
+        f"🪪 *Cédula:* {cedula}\n"
+        f"📱 *Teléfono:* {telefono}\n\n"
+        f"⏰ *Fecha Límite:* {fecha_limite}\n"
+        f"👥 *Pagos validados hasta ahora:* {total_pagados}\n\n"
+        f"📷 *INSTRUCCIONES DE REGISTRO:*\n"
+        f"Envía la captura de tu comprobante a este grupo (o usa el comando `/pago` adjuntando la imagen) para que la IA lo valide."
+    )
+
+    await update.message.reply_text(
+        mensaje_info,
+        parse_mode='Markdown',
+        reply_to_message_id=update.message.message_id
+    )
+

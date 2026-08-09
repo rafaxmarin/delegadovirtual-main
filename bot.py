@@ -10,7 +10,7 @@ from src.presentation.handlers.grupo_handlers import estado_grupos, detalle_grup
 from src.presentation.handlers.recaudacion_handlers import (
     menu_recaudacion, iniciar_recaudacion, procesar_recaudacion, confirmar_recaudacion,
     enviar_recaudacion, validar_comprobante, verificar_fechas_limite_job,
-    ver_reporte_recaudacion_menu, ver_reporte_recaudacion_grupo
+    ver_reporte_recaudacion_menu, ver_reporte_recaudacion_grupo, consultar_recaudacion_comando
 )
 from src.presentation.handlers.minuta_handlers import redactar_minuta, recibir_contenido_minuta, generar_minuta_formato, enviar_minuta_grupo, despachar_minuta
 from src.presentation.handlers.asesoria_handlers import buzon_asesoria, responder_asesoria, ignorar_asesoria, detectar_solicitud_estudiante, enviar_recordatorio_asesoria, enviar_pregunta_asesoria
@@ -39,6 +39,8 @@ def main():
     application.add_handler(CommandHandler('start', start))
     application.add_handler(CommandHandler('menu', menu))
     application.add_handler(CommandHandler('pregunta', enviar_pregunta_asesoria))
+    application.add_handler(CommandHandler('pago', validar_comprobante))
+    application.add_handler(CommandHandler('recaudacion', consultar_recaudacion_comando))
 
     # CALLBACKS DEL MENÚ Y NAVEGACIÓN
     application.add_handler(CallbackQueryHandler(button_auth, pattern='^(soy_profesor|no_profesor)$'))
