@@ -7,7 +7,11 @@ from src.infrastructure.database.sqlite_repository import SQLiteRepository
 from src.presentation.handlers.auth_handlers import start, button_auth, verificar_password
 from src.presentation.handlers.menu_handlers import menu, volver_menu
 from src.presentation.handlers.grupo_handlers import estado_grupos, detalle_grupo, detectar_agregacion_grupo, manejar_respuesta_grupo, confirmar_desvincular_grupo, ejecutar_desvincular_grupo
-from src.presentation.handlers.recaudacion_handlers import iniciar_recaudacion, procesar_recaudacion, confirmar_recaudacion, enviar_recaudacion, validar_comprobante, verificar_fechas_limite_job
+from src.presentation.handlers.recaudacion_handlers import (
+    menu_recaudacion, iniciar_recaudacion, procesar_recaudacion, confirmar_recaudacion,
+    enviar_recaudacion, validar_comprobante, verificar_fechas_limite_job,
+    ver_reporte_recaudacion_menu, ver_reporte_recaudacion_grupo
+)
 from src.presentation.handlers.minuta_handlers import redactar_minuta, recibir_contenido_minuta, generar_minuta_formato, enviar_minuta_grupo, despachar_minuta
 from src.presentation.handlers.asesoria_handlers import buzon_asesoria, responder_asesoria, ignorar_asesoria, detectar_solicitud_estudiante, enviar_recordatorio_asesoria, enviar_pregunta_asesoria
 from src.presentation.handlers.strike_handlers import control_strikes, ver_historial_strikes, monitorear_mensajes
@@ -39,7 +43,10 @@ def main():
     # CALLBACKS DEL MENÚ Y NAVEGACIÓN
     application.add_handler(CallbackQueryHandler(button_auth, pattern='^(soy_profesor|no_profesor)$'))
     application.add_handler(CallbackQueryHandler(estado_grupos, pattern='^menu_estado_grupos$'))
-    application.add_handler(CallbackQueryHandler(iniciar_recaudacion, pattern='^menu_recaudacion$'))
+    application.add_handler(CallbackQueryHandler(menu_recaudacion, pattern='^menu_recaudacion$'))
+    application.add_handler(CallbackQueryHandler(iniciar_recaudacion, pattern='^iniciar_crear_recaudacion$'))
+    application.add_handler(CallbackQueryHandler(ver_reporte_recaudacion_menu, pattern='^ver_reporte_recaudacion_menu$'))
+    application.add_handler(CallbackQueryHandler(ver_reporte_recaudacion_grupo, pattern='^reporte_rec_grupo_'))
     application.add_handler(CallbackQueryHandler(emitir_anuncio, pattern='^menu_anuncio$'))
     application.add_handler(CallbackQueryHandler(redactar_minuta, pattern='^menu_minuta$'))
     application.add_handler(CallbackQueryHandler(compartir_material, pattern='^menu_material$'))
@@ -92,7 +99,7 @@ def main():
     # MENSAJES EN GRUPOS
     application.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, detectar_agregacion_grupo))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.ChatType.GROUPS & filters.Regex(r'(?i)@'), detectar_solicitud_estudiante))
-    application.add_handler(MessageHandler(filters.PHOTO, validar_comprobante))
+    application.add_handler(MessageHandler(filters.PHOTO | filters.Document.IMAGE, validar_comprobante))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.ChatType.GROUPS, monitorear_mensajes))
 
     # MENSAJES PRIVADOS (Atiende texto, documentos, fotos o cualquier contenido según estado)

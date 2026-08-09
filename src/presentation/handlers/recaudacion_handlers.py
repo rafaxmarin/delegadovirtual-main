@@ -7,27 +7,56 @@ from src.presentation.auth_utils import verificar_pertenencia_grupo
 
 gemini = GeminiAdapter()
 
+async def menu_recaudacion(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Muestra el submenú de Recaudación (Crear nueva o Ver reporte)"""
+    query = update.callback_query
+    if query:
+        await query.answer()
+    
+    keyboard = [
+        [InlineKeyboardButton("➕ Crear nueva recaudación", callback_data="iniciar_crear_recaudacion")],
+        [InlineKeyboardButton("📊 Ver reporte de pagos", callback_data="ver_reporte_recaudacion_menu")],
+        [InlineKeyboardButton("🔙 Volver al menú", callback_data="volver_menu")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    texto = (
+        "💰 *GESTIÓN DE RECAUDACIONES*\n\n"
+        "Selecciona la opción deseada:\n\n"
+        "• ➕ *Crear nueva recaudación:* Inicia el registro de una nueva recaudación para un grupo. (Los datos de la recaudación anterior de ese grupo se borrarán).\n"
+        "• 📊 *Ver reporte de pagos:* Muestra el informe en vivo y detalle de pagos recibidos por grupo."
+    )
+
+    if query:
+        await query.edit_message_text(texto, parse_mode='Markdown', reply_markup=reply_markup)
+    elif update.message:
+        await update.message.reply_text(texto, parse_mode='Markdown', reply_markup=reply_markup)
+
 async def iniciar_recaudacion(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Inicia el flujo de creación de recaudación"""
     query = update.callback_query
-    await query.answer()
+    if query:
+        await query.answer()
     
     context.user_data['creando_recaudacion'] = True
     context.user_data['recaudacion_datos'] = {}
     
-    keyboard = [[InlineKeyboardButton("🔙 Cancelar", callback_data="volver_menu")]]
+    keyboard = [[InlineKeyboardButton("🔙 Cancelar", callback_data="menu_recaudacion")]]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
-    await query.edit_message_text(
-        "💰 *CREAR RECAUDACIÓN*\n\n"
+    msg_texto = (
+        "💰 *CREAR NUEVA RECAUDACIÓN*\n\n"
         "Dime los datos de la recaudación. Puedes escribirlo en un solo mensaje "
         "o por partes. Necesito:\n"
         "• 📝 Concepto\n• 💵 Monto (Bs.)\n• 🏦 Banco\n• 🪪 Cédula\n• 📱 Teléfono\n• ⏰ Fecha límite\n\n"
         "Ejemplo: \"Exámenes Unidad I, 120, Mercantil, 12345678, 04121234567, 15/07/2026 23:59\"\n\n"
-        "💡 *Nota:* Al enviar una nueva recaudación a un grupo, se reiniciarán los registros de la anterior.",
-        parse_mode='Markdown',
-        reply_markup=reply_markup
+        "💡 *Nota:* Al confirmar y enviar la recaudación a un grupo, se borrarán automáticamente los datos de la recaudación anterior de ese grupo."
     )
+
+    if query:
+        await query.edit_message_text(msg_texto, parse_mode='Markdown', reply_markup=reply_markup)
+    elif update.message:
+        await update.message.reply_text(msg_texto, parse_mode='Markdown', reply_markup=reply_markup)
 
 async def procesar_recaudacion(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Procesa los datos de recaudación con IA de manera flexible"""
@@ -107,9 +136,9 @@ async def procesar_recaudacion(update: Update, context: ContextTypes.DEFAULT_TYP
             keyboard = [
                 [
                     InlineKeyboardButton("✅ Enviar a grupo", callback_data="confirmar_recaudacion"),
-                    InlineKeyboardButton("🔄 Corregir", callback_data="menu_recaudacion")
+                    InlineKeyboardButton("🔄 Corregir", callback_data="iniciar_crear_recaudacion")
                 ],
-                [InlineKeyboardButton("❌ Cancelar", callback_data="volver_menu")]
+                [InlineKeyboardButton("❌ Cancelar", callback_data="menu_recaudacion")]
             ]
             await update.message.reply_text(resumen, parse_mode='Markdown', reply_markup=InlineKeyboardMarkup(keyboard))
             
@@ -130,7 +159,7 @@ async def confirmar_recaudacion(update: Update, context: ContextTypes.DEFAULT_TY
         return
     
     keyboard = [[InlineKeyboardButton(f"📚 {nombre}", callback_data=f"enviar_recaudacion_{chat_id}")] for chat_id, nombre in grupos]
-    keyboard.append([InlineKeyboardButton("🔙 Cancelar", callback_data="volver_menu")])
+    keyboard.append([InlineKeyboardButton("🔙 Cancelar", callback_data="menu_recaudacion")])
     
     await query.edit_message_text("📋 ¿A qué grupo deseas enviar esta recaudación?", reply_markup=InlineKeyboardMarkup(keyboard))
 
@@ -148,7 +177,7 @@ async def enviar_recaudacion(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     monto = float(str(datos['monto']).replace(',', '.'))
     
-    # Crear nueva recaudación (esto desactiva la previa y limpia pagos anteriores)
+    # Crear nueva recaudación (esto desactiva la previa y limpia pagos anteriores del grupo)
     rec_id = db.crear_recaudacion(
         query.from_user.id, chat_id, str(datos['concepto']), monto,
         str(datos['banco']), str(datos['cedula']), str(datos['telefono']), str(datos['fecha_limite'])
@@ -194,11 +223,82 @@ async def enviar_recaudacion(update: Update, context: ContextTypes.DEFAULT_TYPE)
     
     await query.edit_message_text("✅ Recaudación enviada exitosamente. Se ha iniciado la lista en vivo en el grupo.")
 
-async def actualizar_lista_en_vivo(bot, chat_id: int, db, rec_id: int, concepto: str, monto_unitario: float, fecha_limite: str, mensaje_lista_id: int):
-    """Actualiza en tiempo real el mensaje de lista en vivo en el grupo"""
-    if not mensaje_lista_id:
+async def ver_reporte_recaudacion_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Muestra la lista de grupos del profesor para ver su reporte de recaudación"""
+    query = update.callback_query
+    await query.answer()
+    db = context.bot_data['db']
+    
+    grupos = db.obtener_grupos_profesor(query.from_user.id)
+    if not grupos:
+        await query.edit_message_text("❌ No tienes grupos registrados.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Volver", callback_data="menu_recaudacion")]]))
         return
     
+    keyboard = [[InlineKeyboardButton(f"📚 {nombre}", callback_data=f"reporte_rec_grupo_{chat_id}")] for chat_id, nombre in grupos]
+    keyboard.append([InlineKeyboardButton("🔙 Volver al menú de recaudación", callback_data="menu_recaudacion")])
+    
+    await query.edit_message_text("📊 Selecciona el grupo para ver el reporte de recaudación:", reply_markup=InlineKeyboardMarkup(keyboard))
+
+async def ver_reporte_recaudacion_grupo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Muestra el reporte detallado de recaudación del grupo seleccionado"""
+    query = update.callback_query
+    await query.answer()
+    db = context.bot_data['db']
+
+    chat_id = int(query.data.replace("reporte_rec_grupo_", ""))
+
+    if not await verificar_pertenencia_grupo(chat_id, query.from_user.id, db, query):
+        return
+
+    rec_tuple = db.obtener_recaudacion_activa(chat_id)
+    
+    # Si no hay activa, buscar la última recaudación
+    if not rec_tuple:
+        db.cursor.execute('SELECT * FROM recaudaciones WHERE grupo_id = ? ORDER BY id DESC LIMIT 1', (chat_id,))
+        rec_tuple = db.cursor.fetchone()
+
+    if not rec_tuple:
+        await query.edit_message_text(
+            "❌ No hay recaudaciones registradas para este grupo.",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Volver", callback_data="ver_reporte_recaudacion_menu")]])
+        )
+        return
+
+    rec_id, profesor_id, g_id, concepto, monto_unitario, banco, cedula, telefono, fecha_limite, activa = rec_tuple[:10]
+    monto_unitario = float(monto_unitario)
+    estado_str = "🟢 Activa" if activa == 1 else "🔴 Finalizada"
+
+    pagos = db.obtener_pagos_recaudacion(rec_id)
+    cant_estudiantes = len(pagos)
+    total_recaudado = cant_estudiantes * monto_unitario
+
+    lineas_pagos = []
+    if pagos:
+        for p in pagos:
+            ref = f"#{p[3]}" if len(p) > 3 and p[3] else ""
+            lineas_pagos.append(f"• ✅ *{p[0]}* {ref} — {p[1]}")
+        detalle_pagos_str = "\n".join(lineas_pagos)
+    else:
+        detalle_pagos_str = "⏳ *Ningún pago registrado aún.*"
+
+    reporte_texto = (
+        f"📋 *REPORTE DE RECAUDACIÓN*\n\n"
+        f"📝 *Concepto:* {concepto}\n"
+        f"📌 *Estado:* {estado_str}\n"
+        f"💵 *Monto por estudiante:* Bs. {monto_unitario:,.2f}\n"
+        f"🏦 *Banco Destino:* {banco}\n"
+        f"💰 *Total Recaudado:* Bs. {total_recaudado:,.2f}\n"
+        f"👥 *Estudiantes que pagaron:* {cant_estudiantes}\n"
+        f"⏰ *Fecha límite:* {fecha_limite}\n\n"
+        f"📜 *Detalle de comprobantes validados:*\n"
+        f"{detalle_pagos_str}"
+    )
+
+    keyboard = [[InlineKeyboardButton("🔙 Volver a la lista de grupos", callback_data="ver_reporte_recaudacion_menu")]]
+    await query.edit_message_text(reporte_texto, parse_mode='Markdown', reply_markup=InlineKeyboardMarkup(keyboard))
+
+async def actualizar_lista_en_vivo(bot, chat_id: int, db, rec_id: int, concepto: str, monto_unitario: float, fecha_limite: str, mensaje_lista_id: int):
+    """Actualiza en tiempo real el mensaje de lista en vivo en el grupo o envía uno nuevo si no existe"""
     pagos = db.obtener_pagos_recaudacion(rec_id)
     total_pagados = len(pagos)
     monto_total = total_pagados * monto_unitario
@@ -224,21 +324,41 @@ async def actualizar_lista_en_vivo(bot, chat_id: int, db, rec_id: int, concepto:
         f"⏰ *Fecha Límite:* {fecha_limite}"
     )
 
-    try:
-        await bot.edit_message_text(
-            chat_id=chat_id,
-            message_id=mensaje_lista_id,
-            text=texto_actualizado,
-            parse_mode='Markdown'
-        )
-    except Exception as e:
-        print(f"⚠️ No se pudo actualizar mensaje de lista en vivo: {e}")
+    actualizado = False
+    if mensaje_lista_id:
+        try:
+            await bot.edit_message_text(
+                chat_id=chat_id,
+                message_id=mensaje_lista_id,
+                text=texto_actualizado,
+                parse_mode='Markdown'
+            )
+            actualizado = True
+        except Exception as e:
+            print(f"⚠️ No se pudo editar mensaje anterior de lista en vivo: {e}")
+
+    # Si no existía o falló editar el mensaje anterior, publicamos uno nuevo en el grupo
+    if not actualizado:
+        try:
+            msg_nuevo = await bot.send_message(chat_id, texto_actualizado, parse_mode='Markdown')
+            db.actualizar_mensaje_lista(rec_id, msg_nuevo.message_id)
+        except Exception as e:
+            print(f"⚠️ No se pudo publicar nuevo mensaje de lista en vivo: {e}")
 
 async def validar_comprobante(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Valida la captura enviada en el grupo con IA Gemini Vision"""
-    if not update.message or not update.message.photo:
+    """Valida la captura enviada en el grupo (soporta fotos e imágenes/screenshots enviadas como archivos)"""
+    if not update.message:
         return
     
+    photo_file_id = None
+    if update.message.photo:
+        photo_file_id = update.message.photo[-1].file_id
+    elif update.message.document and update.message.document.mime_type and update.message.document.mime_type.startswith('image/'):
+        photo_file_id = update.message.document.file_id
+    
+    if not photo_file_id:
+        return
+
     chat_id = update.effective_chat.id
     db = context.bot_data['db']
 
@@ -265,14 +385,15 @@ async def validar_comprobante(update: Update, context: ContextTypes.DEFAULT_TYPE
     if db.estudiante_ya_pago(rec_id, user.id, estudiante_nombre):
         await update.message.reply_text(
             f"⚠️ *{estudiante_nombre}*, ya tienes un pago verificado para la recaudación *{concepto}*.",
-            parse_mode='Markdown'
+            parse_mode='Markdown',
+            reply_to_message_id=update.message.message_id
         )
         return
 
-    msg_procesando = await update.message.reply_text("🔍 *Analizando comprobante con visión IA...*", parse_mode='Markdown')
+    msg_procesando = await update.message.reply_text("🔍 *Analizando comprobante con visión IA...*", parse_mode='Markdown', reply_to_message_id=update.message.message_id)
 
     try:
-        photo_file = await context.bot.get_file(update.message.photo[-1].file_id)
+        photo_file = await context.bot.get_file(photo_file_id)
         image_bytes = await photo_file.download_as_bytearray()
 
         datos_recaudacion = {
@@ -301,23 +422,24 @@ async def validar_comprobante(update: Update, context: ContextTypes.DEFAULT_TYPE
                 numero_verificacion=num_ref
             )
 
-            # Notificar éxito en el grupo
+            # 1. NOTIFICAR EN EL GRUPO QUE EL PAGO ES VÁLIDO
             await update.message.reply_text(
-                f"✅ *¡PAGO VERIFICADO EXITOSAMENTE!*\n\n"
+                f"✅ *¡PAGO VÁLIDO Y VERIFICADO!*\n\n"
                 f"👤 *Estudiante:* {estudiante_nombre}\n"
                 f"🔢 *Ref / Comprobante:* #{num_ref}\n"
                 f"🏦 *Banco Destino:* {banco_det}\n"
                 f"💵 *Monto:* Bs. {monto_esperado:,.2f}\n"
                 f"📅 *Fecha:* {fecha_pago}",
-                parse_mode='Markdown'
+                parse_mode='Markdown',
+                reply_to_message_id=update.message.message_id
             )
 
-            # Actualizar lista en vivo en el grupo
+            # 2. ACTUALIZAR LISTA EN VIVO EN EL GRUPO
             await actualizar_lista_en_vivo(
                 context.bot, chat_id, db, rec_id, concepto, monto_esperado, fecha_limite, mensaje_lista_id
             )
 
-            # Notificar al profesor en privado
+            # 3. NOTIFICAR AL PROFESOR EN PRIVADO
             total_pagos = db.contar_pagos(rec_id)
             total_recaudado = total_pagos * monto_esperado
             try:
@@ -343,19 +465,22 @@ async def validar_comprobante(update: Update, context: ContextTypes.DEFAULT_TYPE
         else:
             motivo = evaluacion.get('motivo_rechazo', 'La captura no cumple con los requisitos esperados.')
             banco_det = evaluacion.get('banco_detectado', 'Desconocido')
+
+            # 1. NOTIFICAR EN EL GRUPO QUE EL PAGO NO ES VÁLIDO
             await update.message.reply_text(
-                f"❌ *COMPROBANTE NO ACEPTADO*\n\n"
+                f"❌ *PAGO NO VÁLIDO / RECHAZADO*\n\n"
                 f"👤 *Estudiante:* {estudiante_nombre}\n"
                 f"⚠️ *Motivo:* {motivo}\n"
                 f"🏦 *Banco Detectado:* {banco_det}\n\n"
                 f"📌 *Por favor verifica que la captura sea clara y emitida hacia el banco {banco_esperado}.*",
-                parse_mode='Markdown'
+                parse_mode='Markdown',
+                reply_to_message_id=update.message.message_id
             )
 
     except Exception as e:
         try: await msg_procesando.delete()
         except: pass
-        await update.message.reply_text(f"⚠️ No se pudo procesar la imagen del comprobante: {str(e)}")
+        await update.message.reply_text(f"⚠️ No se pudo procesar la imagen del comprobante: {str(e)}", reply_to_message_id=update.message.message_id)
 
 async def enviar_informe_final(bot, db, rec_tuple: tuple, motivo_trigger: str = "Fecha límite alcanzada"):
     """Envía el informe final de recaudación al profesor"""
