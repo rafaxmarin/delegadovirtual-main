@@ -23,8 +23,7 @@ async def menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "• `/recaudacion` — Consulta los datos de la recaudación activa del grupo.\n"
             "• `/pago` — Valida tu captura de comprobante de pago en el grupo.\n\n"
             "❓ *Asesorías y Preguntas:*\n"
-            "• `/pregunta [tu duda]` — Envía una duda directamente al buzón del profesor.\n\n"
-            "💡 *¿Eres profesor?* Usa `/start` para verificar tu acceso de administración."
+            "• `/pregunta [tu duda]` — Envía una duda directamente al buzón del profesor."
         )
         reply_markup = get_estudiante_menu_keyboard()
     
