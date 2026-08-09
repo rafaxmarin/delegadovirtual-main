@@ -301,12 +301,13 @@ class SQLiteRepository:
         return self.cursor.fetchall()
     
     # Métodos para asesorías
-    def agregar_asesoria(self, grupo_id: int, grupo_nombre: str, estudiante_nombre: str, pregunta: str):
+    def agregar_asesoria(self, grupo_id: int, grupo_nombre: str, estudiante_nombre: str, pregunta: str) -> int:
         self.cursor.execute(
             'INSERT INTO asesorias (grupo_id, grupo_nombre, estudiante_nombre, pregunta, fecha) VALUES (?, ?, ?, ?, ?)',
             (grupo_id, grupo_nombre, estudiante_nombre, pregunta, datetime.now().isoformat())
         )
         self.conn.commit()
+        return self.cursor.lastrowid
     
     def obtener_asesorias_pendientes(self, profesor_id: int) -> List[Tuple]:
         self.cursor.execute('''

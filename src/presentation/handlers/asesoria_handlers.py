@@ -154,6 +154,51 @@ async def ignorar_asesoria(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await buzon_asesoria(update, context)
 
 
+async def notificar_profesor_nueva_asesoria(
+    context: ContextTypes.DEFAULT_TYPE,
+    profesor_id: int,
+    grupo_nombre: str,
+    estudiante_nombre: str,
+    pregunta: str,
+    solicitud_id: int = None
+):
+    """Envía una notificación privada inmediata al profesor con botones interactivos"""
+    if not profesor_id:
+        return
+    
+    mensaje = (
+        f"📬 *NUEVA SOLICITUD DE ASESORÍA*\n\n"
+        f"📚 *Grupo:* {grupo_nombre}\n"
+        f"👤 *Estudiante:* {estudiante_nombre}\n"
+        f"💬 *Pregunta:* \"{pregunta}\"\n\n"
+        f"💡 Puedes responder de inmediato usando los botones de abajo o accediendo al buzón."
+    )
+    
+    keyboard = []
+    if solicitud_id:
+        keyboard.append([
+            InlineKeyboardButton(
+                f"💬 Responder a {estudiante_nombre}",
+                callback_data=f"responder_asesoria_{solicitud_id}"
+            )
+        ])
+    keyboard.append([
+        InlineKeyboardButton("📬 Abrir Buzón de Asesoría", callback_data="menu_asesoria")
+    ])
+    
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    try:
+        await context.bot.send_message(
+            chat_id=profesor_id,
+            text=mensaje,
+            parse_mode='Markdown',
+            reply_markup=reply_markup
+        )
+        print(f"🔔 Notificación privada interactiva enviada con éxito al profesor ID {profesor_id}")
+    except Exception as e:
+        print(f"❌ No se pudo enviar notificación privada al profesor ID {profesor_id}: {e}")
+
 async def enviar_pregunta_asesoria(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Procesa el comando /pregunta enviado por un estudiante en un grupo"""
     chat = update.effective_chat
@@ -194,9 +239,9 @@ async def enviar_pregunta_asesoria(update: Update, context: ContextTypes.DEFAULT
         await message.reply_text("❌ Se ha alcanzado el límite de 10 solicitudes por hoy. Intenta de nuevo mañana.")
         return
 
-    db.agregar_asesoria(chat.id, chat.title or "Grupo", user.full_name, pregunta)
+    solicitud_id = db.agregar_asesoria(chat.id, chat.title or "Grupo", user.full_name, pregunta)
     db.incrementar_contador_asesorias(chat.id)
-    print(f"✅ Asesoría recibida vía /pregunta: '{pregunta}' en grupo '{chat.title}'")
+    print(f"✅ Asesoría recibida vía /pregunta (ID: {solicitud_id}): '{pregunta}' en grupo '{chat.title}'")
 
     await message.reply_text(
         f"✅ Tu pregunta ha sido enviada al profesor.\n"
@@ -205,19 +250,14 @@ async def enviar_pregunta_asesoria(update: Update, context: ContextTypes.DEFAULT
 
     profesor_id = db.obtener_profesor_de_grupo(chat.id)
     if profesor_id:
-        try:
-            await context.bot.send_message(
-                profesor_id,
-                f"📬 *NUEVA SOLICITUD DE ASESORÍA*\n\n"
-                f"📚 *Grupo:* {chat.title}\n"
-                f"👤 *Estudiante:* {user.full_name}\n"
-                f"💬 *Pregunta:* {pregunta}\n\n"
-                f"💡 Revisa tu buzón de asesorías en /menu",
-                parse_mode='Markdown'
-            )
-            print(f"🔔 Notificación privada enviada al profesor ID {profesor_id}")
-        except Exception as e:
-            print(f"❌ No se pudo enviar notificación privada al profesor: {e}")
+        await notificar_profesor_nueva_asesoria(
+            context=context,
+            profesor_id=profesor_id,
+            grupo_nombre=chat.title or "Grupo",
+            estudiante_nombre=user.full_name,
+            pregunta=pregunta,
+            solicitud_id=solicitud_id
+        )
 
 async def detectar_solicitud_estudiante(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Detecta cuando un estudiante etiqueta al bot en un grupo y notifica al profesor"""
@@ -234,7 +274,12 @@ async def detectar_solicitud_estudiante(update: Update, context: ContextTypes.DE
     
     bot_username = context.bot.username
     if not bot_username:
-        return
+        try:
+            bot_info = await context.bot.get_me()
+            bot_username = bot_info.username
+        except Exception as e:
+            print(f"⚠️ No se pudo obtener el username del bot: {e}")
+            return
     
     # Búsqueda insensible a mayúsculas/minúsculas del @bot_username
     if f"@{bot_username}".lower() not in message.text.lower():
@@ -264,9 +309,9 @@ async def detectar_solicitud_estudiante(update: Update, context: ContextTypes.DE
         await message.reply_text("Por favor, escribe tu pregunta después de etiquetarme o usa /pregunta.")
         return
     
-    db.agregar_asesoria(chat.id, chat.title or "Grupo", user.full_name, pregunta)
+    solicitud_id = db.agregar_asesoria(chat.id, chat.title or "Grupo", user.full_name, pregunta)
     db.incrementar_contador_asesorias(chat.id)
-    print(f"✅ Asesoría guardada exitosamente en DB: '{pregunta}' para el grupo '{chat.title}'")
+    print(f"✅ Asesoría guardada exitosamente en DB (ID: {solicitud_id}): '{pregunta}' para el grupo '{chat.title}'")
     
     await message.reply_text(
         f"✅ Tu pregunta ha sido enviada al profesor.\n"
@@ -276,19 +321,14 @@ async def detectar_solicitud_estudiante(update: Update, context: ContextTypes.DE
     # 🔔 NOTIFICACIÓN INSTANTÁNEA PRIVADA AL PROFESOR
     profesor_id = db.obtener_profesor_de_grupo(chat.id)
     if profesor_id:
-        try:
-            await context.bot.send_message(
-                profesor_id,
-                f"📬 *NUEVA SOLICITUD DE ASESORÍA*\n\n"
-                f"📚 *Grupo:* {chat.title}\n"
-                f"👤 *Estudiante:* {user.full_name}\n"
-                f"💬 *Pregunta:* {pregunta}\n\n"
-                f"💡 Revisa tu buzón de asesorías en /menu",
-                parse_mode='Markdown'
-            )
-            print(f"🔔 Notificación privada enviada al profesor ID {profesor_id}")
-        except Exception as e:
-            print(f"❌ No se pudo enviar notificación privada al profesor: {e}")
+        await notificar_profesor_nueva_asesoria(
+            context=context,
+            profesor_id=profesor_id,
+            grupo_nombre=chat.title or "Grupo",
+            estudiante_nombre=user.full_name,
+            pregunta=pregunta,
+            solicitud_id=solicitud_id
+        )
 
 async def enviar_recordatorio_asesoria(context: ContextTypes.DEFAULT_TYPE):
     """Envía recordatorio cada 48 horas a los grupos registrados"""
