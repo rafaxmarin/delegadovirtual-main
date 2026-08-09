@@ -353,18 +353,28 @@ async def validar_comprobante(update: Update, context: ContextTypes.DEFAULT_TYPE
     photo_file_id = None
     if update.message.photo:
         photo_file_id = update.message.photo[-1].file_id
-    elif update.message.document and update.message.document.mime_type and update.message.document.mime_type.startswith('image/'):
-        photo_file_id = update.message.document.file_id
+    elif update.message.document:
+        doc = update.message.document
+        mime = doc.mime_type or ""
+        fname = doc.file_name or ""
+        if mime.startswith('image/') or fname.lower().endswith(('.png', '.jpg', '.jpeg', '.webp', '.bmp', '.heic')):
+            photo_file_id = doc.file_id
     
     if not photo_file_id:
         return
 
     chat_id = update.effective_chat.id
+    user = update.effective_user
+    estudiante_nombre = user.full_name or (f"@{user.username}" if user.username else "Estudiante")
+
+    print(f"📸 Imagen/Comprobante recibido de {estudiante_nombre} en chat ID: {chat_id}")
+
     db = context.bot_data['db']
 
     # Solo procesar si el grupo tiene una recaudación activa
     rec_tuple = db.obtener_recaudacion_activa(chat_id)
     if not rec_tuple:
+        print(f"⚠️ El chat {chat_id} no tiene una recaudación activa en la base de datos.")
         return
     
     # Extraer campos de recaudación
@@ -377,9 +387,6 @@ async def validar_comprobante(update: Update, context: ContextTypes.DEFAULT_TYPE
     telefono_esperado = rec_tuple[7]
     fecha_limite = rec_tuple[8]
     mensaje_lista_id = rec_tuple[10] if len(rec_tuple) > 10 else None
-
-    user = update.effective_user
-    estudiante_nombre = user.full_name or (f"@{user.username}" if user.username else "Estudiante")
 
     # Verificar si el estudiante ya registró un pago para esta recaudación
     if db.estudiante_ya_pago(rec_id, user.id, estudiante_nombre):

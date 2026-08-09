@@ -99,7 +99,7 @@ def main():
     # MENSAJES EN GRUPOS
     application.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, detectar_agregacion_grupo))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.ChatType.GROUPS & filters.Regex(r'(?i)@'), detectar_solicitud_estudiante))
-    application.add_handler(MessageHandler(filters.PHOTO | filters.Document.IMAGE, validar_comprobante))
+    application.add_handler(MessageHandler(filters.PHOTO | filters.Document.ALL, validar_comprobante))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.ChatType.GROUPS, monitorear_mensajes))
 
     # MENSAJES PRIVADOS (Atiende texto, documentos, fotos o cualquier contenido según estado)
