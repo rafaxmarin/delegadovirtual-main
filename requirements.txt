@@ -1,5 +1,15 @@
+# Bot de Telegram
 python-telegram-bot>=22.0
+
+# IA - Google Gemini
 google-generativeai==0.8.3
+
+# Variables de entorno
 python-dotenv==1.0.0
+
+# Generación de documentos
 python-docx==1.0.1
 reportlab==4.0.4
+
+# Procesamiento de imágenes (usado por Gemini para validar comprobantes)
+Pillow>=10.0.0
