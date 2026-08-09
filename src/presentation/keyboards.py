@@ -28,6 +28,15 @@ def get_menu_keyboard() -> InlineKeyboardMarkup:
     ]
     return InlineKeyboardMarkup(keyboard)
 
+def get_estudiante_menu_keyboard() -> InlineKeyboardMarkup:
+    keyboard = [
+        [InlineKeyboardButton("💸 Consultar Recaudación", callback_data="estudiante_recaudacion")],
+        [InlineKeyboardButton("📷 Cómo subir un Pago", callback_data="estudiante_guia_pago")],
+        [InlineKeyboardButton("❓ Cómo hacer una Pregunta", callback_data="estudiante_guia_pregunta")],
+        [InlineKeyboardButton("❌ Cerrar panel", callback_data="menu_cerrar")]
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
 def get_auth_keyboard() -> InlineKeyboardMarkup:
     keyboard = [
         [InlineKeyboardButton("✅ Sí, soy profesor", callback_data="soy_profesor")],

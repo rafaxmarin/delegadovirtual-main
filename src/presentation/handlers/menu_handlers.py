@@ -1,45 +1,136 @@
-from telegram import Update
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
-from src.presentation.keyboards import get_menu_keyboard
+from src.presentation.keyboards import get_menu_keyboard, get_estudiante_menu_keyboard
 
 async def menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Maneja el comando /menu y despliega el menú principal (Soporta callback y message)"""
+    """Maneja el comando /menu y despliega el menú (Profesor o Estudiante según perfil)"""
     user = update.effective_user
     db = context.bot_data['db']
     
-    if not db.es_profesor_verificado(user.id):
-        texto_error = "🔒 Debes verificar tu acceso de profesor primero. Usa /start para comenzar."
-        if update.callback_query:
-            await update.callback_query.message.reply_text(texto_error)
-        elif update.message:
-            await update.message.reply_text(texto_error)
-        return
+    es_profesor = db.es_profesor_verificado(user.id)
     
-    texto_menu = (
-        "📋 *MENÚ PRINCIPAL - Delegado Virtual*\n\n"
-        "Selecciona la función que deseas utilizar:"
-    )
+    if es_profesor:
+        texto_menu = (
+            "📋 *MENÚ PRINCIPAL DE PROFESOR*\n\n"
+            "Selecciona la función que deseas utilizar:"
+        )
+        reply_markup = get_menu_keyboard()
+    else:
+        texto_menu = (
+            "🎓 *MENÚ DE ESTUDIANTES - Delegado Virtual*\n\n"
+            "¡Hola! Selecciona una opción o utiliza los siguientes comandos en tu grupo:\n\n"
+            "💸 *Recaudaciones y Pagos:*\n"
+            "• `/recaudacion` — Consulta los datos de la recaudación activa del grupo.\n"
+            "• `/pago` — Valida tu captura de comprobante de pago en el grupo.\n\n"
+            "❓ *Asesorías y Preguntas:*\n"
+            "• `/pregunta [tu duda]` — Envía una duda directamente al buzón del profesor.\n\n"
+            "💡 *¿Eres profesor?* Usa `/start` para verificar tu acceso de administración."
+        )
+        reply_markup = get_estudiante_menu_keyboard()
     
     if update.callback_query:
         try:
             await update.callback_query.edit_message_text(
                 texto_menu,
                 parse_mode='Markdown',
-                reply_markup=get_menu_keyboard()
+                reply_markup=reply_markup
             )
         except Exception:
             await update.callback_query.message.reply_text(
                 texto_menu,
                 parse_mode='Markdown',
-                reply_markup=get_menu_keyboard()
+                reply_markup=reply_markup
             )
     elif update.message:
         await update.message.reply_text(
             texto_menu,
             parse_mode='Markdown',
-            reply_markup=get_menu_keyboard()
+            reply_markup=reply_markup
         )
 
 async def volver_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Vuelve al menú principal desde un callback button y limpia el estado activo"""
     await menu(update, context)
+
+async def cerrar_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Cierra/elimina el mensaje del menú al hacer clic en Cerrar"""
+    query = update.callback_query
+    if query:
+        await query.answer()
+        try:
+            await query.delete_message()
+        except Exception:
+            await query.edit_message_text("✅ Panel cerrado.")
+
+async def estudiante_recaudacion_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Acción del botón Consultar Recaudación del menú de estudiante"""
+    query = update.callback_query
+    if query:
+        await query.answer()
+    
+    chat_type = update.effective_chat.type
+    chat_id = update.effective_chat.id
+    db = context.bot_data['db']
+
+    if chat_type == 'private':
+        texto = (
+            "📌 *Consulta de Recaudación en Grupo*\n\n"
+            "Para consultar los datos de pago activo, debes usar el botón o el comando `/recaudacion` **dentro del grupo de tu materia** donde está registrado el bot."
+        )
+        keyboard = [[InlineKeyboardButton("🔙 Volver al menú", callback_data="volver_menu")]]
+        await query.edit_message_text(texto, parse_mode='Markdown', reply_markup=InlineKeyboardMarkup(keyboard))
+        return
+
+    rec_tuple = db.obtener_recaudacion_activa(chat_id)
+    if not rec_tuple:
+        texto = "⚠️ *No hay ninguna recaudación activa en este grupo en este momento.*"
+    else:
+        rec_id, profesor_id, g_id, concepto, monto, banco, cedula, telefono, fecha_limite, activa = rec_tuple[:10]
+        monto = float(monto)
+        pagos = db.obtener_pagos_recaudacion(rec_id)
+        total_pagados = len(pagos)
+        texto = (
+            f"💸 *RECAUDACIÓN ACTIVA DEL GRUPO*\n\n"
+            f"📝 *Concepto:* {concepto}\n"
+            f"💵 *Monto requerimiento:* Bs. {monto:,.2f}\n\n"
+            f"💳 *DATOS DE PAGO MÓVIL (DESTINO):*\n"
+            f"🏦 *Banco:* {banco}\n"
+            f"🪪 *Cédula:* {cedula}\n"
+            f"📱 *Teléfono:* {telefono}\n\n"
+            f"⏰ *Fecha Límite:* {fecha_limite}\n"
+            f"👥 *Pagos validados:* {total_pagados}"
+        )
+    keyboard = [[InlineKeyboardButton("🔙 Volver al menú", callback_data="volver_menu")]]
+    await query.edit_message_text(texto, parse_mode='Markdown', reply_markup=InlineKeyboardMarkup(keyboard))
+
+async def estudiante_guia_pago_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Acción del botón Guía para subir Pago del menú de estudiante"""
+    query = update.callback_query
+    if query:
+        await query.answer()
+
+    guia = (
+        "📷 *GUÍA PARA REGISTRAR TU COMPROBANTE DE PAGO*\n\n"
+        "1. Entra al grupo de tu clase donde está el bot.\n"
+        "2. Envía la captura o imagen del comprobante de Pago Móvil.\n"
+        "3. Puedes adjuntarla acompañada del comando `/pago`.\n"
+        "4. La IA verificará los datos (Monto, Banco Destino, Ref, Fecha) y registrará tu pago en la lista en vivo automáticamente."
+    )
+    keyboard = [[InlineKeyboardButton("🔙 Volver al menú", callback_data="volver_menu")]]
+    await query.edit_message_text(guia, parse_mode='Markdown', reply_markup=InlineKeyboardMarkup(keyboard))
+
+async def estudiante_guia_pregunta_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Acción del botón Guía para hacer una Pregunta al Profesor"""
+    query = update.callback_query
+    if query:
+        await query.answer()
+
+    guia = (
+        "❓ *GUÍA PARA HACER PREGUNTAS AL PROFESOR*\n\n"
+        "Para realizar una consulta académica sin saturar el grupo:\n\n"
+        "• Escribe el comando `/pregunta` seguido de tu duda.\n"
+        "• *Ejemplo:* `/pregunta Profe, ¿cuál es el tema que entra en la evaluación de mañana?`\n\n"
+        "La pregunta llegará directamente al buzón privado del profesor para ser respondida."
+    )
+    keyboard = [[InlineKeyboardButton("🔙 Volver al menú", callback_data="volver_menu")]]
+    await query.edit_message_text(guia, parse_mode='Markdown', reply_markup=InlineKeyboardMarkup(keyboard))

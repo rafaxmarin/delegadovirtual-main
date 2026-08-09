@@ -5,7 +5,10 @@ from src.config import Config
 from src.infrastructure.database.sqlite_repository import SQLiteRepository
 
 from src.presentation.handlers.auth_handlers import start, button_auth, verificar_password
-from src.presentation.handlers.menu_handlers import menu, volver_menu
+from src.presentation.handlers.menu_handlers import (
+    menu, volver_menu, cerrar_menu, estudiante_recaudacion_callback,
+    estudiante_guia_pago_callback, estudiante_guia_pregunta_callback
+)
 from src.presentation.handlers.grupo_handlers import estado_grupos, detalle_grupo, detectar_agregacion_grupo, manejar_respuesta_grupo, confirmar_desvincular_grupo, ejecutar_desvincular_grupo
 from src.presentation.handlers.recaudacion_handlers import (
     menu_recaudacion, iniciar_recaudacion, procesar_recaudacion, confirmar_recaudacion,
@@ -58,6 +61,12 @@ def main():
     application.add_handler(CallbackQueryHandler(agregar_alumno, pattern='^menu_agregar$'))
     application.add_handler(CallbackQueryHandler(eliminar_alumno, pattern='^menu_eliminar$'))
     application.add_handler(CallbackQueryHandler(volver_menu, pattern='^volver_menu$'))
+    application.add_handler(CallbackQueryHandler(cerrar_menu, pattern='^menu_cerrar$'))
+
+    # CALLBACKS MENÚ DE ESTUDIANTES
+    application.add_handler(CallbackQueryHandler(estudiante_recaudacion_callback, pattern='^estudiante_recaudacion$'))
+    application.add_handler(CallbackQueryHandler(estudiante_guia_pago_callback, pattern='^estudiante_guia_pago$'))
+    application.add_handler(CallbackQueryHandler(estudiante_guia_pregunta_callback, pattern='^estudiante_guia_pregunta$'))
 
     # CALLBACKS DE GRUPOS
     application.add_handler(CallbackQueryHandler(detalle_grupo, pattern='^detalle_grupo_'))
