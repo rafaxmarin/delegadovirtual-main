@@ -28,6 +28,7 @@ class Recaudacion:
     telefono: str
     fecha_limite: str
     activa: bool = True
+    mensaje_lista_id: Optional[int] = None
 
 @dataclass
 class Pago:
@@ -36,6 +37,8 @@ class Pago:
     estudiante_nombre: str
     fecha_pago: str
     validado: bool = True
+    estudiante_id: Optional[int] = None
+    numero_verificacion: Optional[str] = None
 
 @dataclass
 class Strike:

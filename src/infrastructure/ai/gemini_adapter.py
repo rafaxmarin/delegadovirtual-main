@@ -83,6 +83,71 @@ class GeminiAdapter:
         response = self.model.generate_content([prompt, image_obj])
         return response.text.strip()
     
+    def validar_comprobante_contra_recaudacion(self, image_input: Union[bytes, Image.Image], datos_recaudacion: dict) -> dict:
+        """
+        Analiza un comprobante de pago con Gemini Vision y lo valida contra los parámetros requeridos.
+        Verifica explícitamente que el banco destino coincida con el registrado por el profesor.
+        """
+        import json, re
+        prompt = f"""
+        Analiza esta imagen de captura/comprobante de pago móvil o transferencia bancaria y evalúa si cumple los requisitos de la recaudación.
+
+        Parámetros requeridos por la recaudación:
+        - Concepto: {datos_recaudacion.get('concepto', '')}
+        - Monto esperado: Bs. {datos_recaudacion.get('monto', 0)}
+        - Banco destino esperado: {datos_recaudacion.get('banco', '')}
+        - Cédula destino esperada: {datos_recaudacion.get('cedula', '')}
+        - Teléfono destino esperado: {datos_recaudacion.get('telefono', '')}
+
+        Instrucciones de verificación:
+        1. Extrae:
+           - Nombre/Apellido del pagador o titular de la cuenta origen
+           - Número de referencia / verificación / transacción
+           - Monto pagado
+           - Banco destino o banco receptor indicado en el comprobante
+           - Fecha y hora de la transacción
+        2. Requisitos obligatorios para declarar "valido": true:
+           - El banco destino de la captura DEBE coincidir o pertenecer al mismo banco/entidad que {datos_recaudacion.get('banco', '')}.
+           - El monto detectado DEBE ser igual o mayor al monto esperado (Bs. {datos_recaudacion.get('monto', 0)}).
+           - Debe ser visible un número de referencia/verificación válido.
+        3. Si algún requisito falla (por ejemplo, banco destino distinto, monto insuficiente, imagen ilegible o no es un comprobante), coloca "valido": false y explica la razón exacta en "motivo_rechazo".
+
+        Responde EXCLUSIVAMENTE en formato JSON sin formato markdown extra:
+        {{
+          "valido": true,
+          "nombre_pagador": "Nombre del pagador",
+          "numero_verificacion": "123456",
+          "monto_detectado": 120.0,
+          "banco_detectado": "Nombre del banco destino detectado",
+          "fecha_pago": "DD/MM/AAAA HH:MM",
+          "motivo_rechazo": ""
+        }}
+        """
+
+        if isinstance(image_input, bytes):
+            image_obj = Image.open(io.BytesIO(image_input))
+        else:
+            image_obj = image_input
+
+        response = self.model.generate_content([prompt, image_obj])
+        raw_text = response.text.strip().replace('```json', '').replace('```', '').strip()
+
+        try:
+            return json.loads(raw_text)
+        except Exception:
+            json_match = re.search(r'\{.*\}', raw_text, re.DOTALL)
+            if json_match:
+                return json.loads(json_match.group())
+            return {
+                "valido": False,
+                "nombre_pagador": "Desconocido",
+                "numero_verificacion": "N/A",
+                "monto_detectado": 0.0,
+                "banco_detectado": "Desconocido",
+                "fecha_pago": "",
+                "motivo_rechazo": "No se pudo interpretar los datos del comprobante."
+            }
+    
     def interpretar_intencion(self, mensaje: str) -> str:
         """Interpreta la intención del profesor en lenguaje natural"""
         prompt = f"""

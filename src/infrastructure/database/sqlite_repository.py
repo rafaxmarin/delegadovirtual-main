@@ -44,6 +44,7 @@ class SQLiteRepository:
                 telefono TEXT,
                 fecha_limite TEXT,
                 activa INTEGER DEFAULT 1,
+                mensaje_lista_id INTEGER,
                 FOREIGN KEY (profesor_id) REFERENCES profesores(user_id),
                 FOREIGN KEY (grupo_id) REFERENCES grupos(chat_id)
             )
@@ -54,7 +55,9 @@ class SQLiteRepository:
             CREATE TABLE IF NOT EXISTS pagos (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 recaudacion_id INTEGER,
+                estudiante_id INTEGER,
                 estudiante_nombre TEXT,
+                numero_verificacion TEXT,
                 fecha_pago TEXT,
                 validado INTEGER DEFAULT 1,
                 FOREIGN KEY (recaudacion_id) REFERENCES recaudaciones(id)
@@ -99,6 +102,24 @@ class SQLiteRepository:
         ''')
         
         self.conn.commit()
+        self._migrar_esquema()
+
+    def _migrar_esquema(self):
+        """Asegura que columnas agregadas existan en bases de datos anteriores"""
+        try:
+            cols_rec = [c[1] for c in self.cursor.execute("PRAGMA table_info(recaudaciones)").fetchall()]
+            if 'mensaje_lista_id' not in cols_rec:
+                self.cursor.execute("ALTER TABLE recaudaciones ADD COLUMN mensaje_lista_id INTEGER")
+
+            cols_pagos = [c[1] for c in self.cursor.execute("PRAGMA table_info(pagos)").fetchall()]
+            if 'estudiante_id' not in cols_pagos:
+                self.cursor.execute("ALTER TABLE pagos ADD COLUMN estudiante_id INTEGER")
+            if 'numero_verificacion' not in cols_pagos:
+                self.cursor.execute("ALTER TABLE pagos ADD COLUMN numero_verificacion TEXT")
+            
+            self.conn.commit()
+        except Exception as e:
+            print(f"⚠️ Nota de migración de BD: {e}")
     
     # Métodos para profesores
     def registrar_profesor(self, user_id: int, username: str):
@@ -163,12 +184,28 @@ class SQLiteRepository:
     # Métodos para recaudaciones
     def crear_recaudacion(self, profesor_id: int, grupo_id: int, concepto: str, monto: float,
                           banco: str, cedula: str, telefono: str, fecha_limite: str) -> int:
+        # Desactivar recaudación previa del grupo y borrar sus pagos (nueva recaudación limpia los datos anteriores)
+        self.limpiar_recaudacion_anterior(grupo_id)
+
         self.cursor.execute('''
-            INSERT INTO recaudaciones (profesor_id, grupo_id, concepto, monto, banco, cedula, telefono, fecha_limite)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO recaudaciones (profesor_id, grupo_id, concepto, monto, banco, cedula, telefono, fecha_limite, activa)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)
         ''', (profesor_id, grupo_id, concepto, monto, banco, cedula, telefono, fecha_limite))
         self.conn.commit()
         return self.cursor.lastrowid
+    
+    def limpiar_recaudacion_anterior(self, grupo_id: int):
+        """Elimina recaudaciones anteriores activas y sus pagos para el grupo"""
+        self.cursor.execute('SELECT id FROM recaudaciones WHERE grupo_id = ?', (grupo_id,))
+        rec_ids = [row[0] for row in self.cursor.fetchall()]
+        for r_id in rec_ids:
+            self.cursor.execute('DELETE FROM pagos WHERE recaudacion_id = ?', (r_id,))
+        self.cursor.execute('UPDATE recaudaciones SET activa = 0 WHERE grupo_id = ?', (grupo_id,))
+        self.conn.commit()
+    
+    def actualizar_mensaje_lista(self, recaudacion_id: int, mensaje_lista_id: int):
+        self.cursor.execute('UPDATE recaudaciones SET mensaje_lista_id = ? WHERE id = ?', (mensaje_lista_id, recaudacion_id))
+        self.conn.commit()
     
     def obtener_recaudacion_activa(self, grupo_id: int) -> Optional[Tuple]:
         self.cursor.execute(
@@ -176,22 +213,47 @@ class SQLiteRepository:
             (grupo_id,)
         )
         return self.cursor.fetchone()
+
+    def obtener_todas_recaudaciones_activas(self) -> List[Tuple]:
+        self.cursor.execute('SELECT * FROM recaudaciones WHERE activa = 1')
+        return self.cursor.fetchall()
     
     def finalizar_recaudacion(self, recaudacion_id: int):
         self.cursor.execute('UPDATE recaudaciones SET activa = 0 WHERE id = ?', (recaudacion_id,))
         self.conn.commit()
     
     # Métodos para pagos
-    def registrar_pago(self, recaudacion_id: int, estudiante_nombre: str, fecha_pago: str):
+    def registrar_pago(self, recaudacion_id: int, estudiante_nombre: str, fecha_pago: str,
+                       estudiante_id: Optional[int] = None, numero_verificacion: Optional[str] = None):
         self.cursor.execute(
-            'INSERT INTO pagos (recaudacion_id, estudiante_nombre, fecha_pago) VALUES (?, ?, ?)',
-            (recaudacion_id, estudiante_nombre, fecha_pago)
+            '''INSERT INTO pagos (recaudacion_id, estudiante_id, estudiante_nombre, numero_verificacion, fecha_pago, validado)
+               VALUES (?, ?, ?, ?, ?, 1)''',
+            (recaudacion_id, estudiante_id, estudiante_nombre, numero_verificacion, fecha_pago)
         )
         self.conn.commit()
+
+    def estudiante_ya_pago(self, recaudacion_id: int, estudiante_id: Optional[int], estudiante_nombre: str) -> bool:
+        if estudiante_id:
+            self.cursor.execute(
+                'SELECT 1 FROM pagos WHERE recaudacion_id = ? AND estudiante_id = ?',
+                (recaudacion_id, estudiante_id)
+            )
+            if self.cursor.fetchone():
+                return True
+        self.cursor.execute(
+            'SELECT 1 FROM pagos WHERE recaudacion_id = ? AND LOWER(estudiante_nombre) = LOWER(?)',
+            (recaudacion_id, estudiante_nombre)
+        )
+        return self.cursor.fetchone() is not None
+
+    def contar_pagos(self, recaudacion_id: int) -> int:
+        self.cursor.execute('SELECT COUNT(*) FROM pagos WHERE recaudacion_id = ?', (recaudacion_id,))
+        res = self.cursor.fetchone()
+        return res[0] if res else 0
     
     def obtener_pagos_recaudacion(self, recaudacion_id: int) -> List[Tuple]:
         self.cursor.execute(
-            'SELECT estudiante_nombre, fecha_pago FROM pagos WHERE recaudacion_id = ? ORDER BY id',
+            'SELECT estudiante_nombre, fecha_pago, estudiante_id, numero_verificacion FROM pagos WHERE recaudacion_id = ? ORDER BY id',
             (recaudacion_id,)
         )
         return self.cursor.fetchall()

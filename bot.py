@@ -7,7 +7,7 @@ from src.infrastructure.database.sqlite_repository import SQLiteRepository
 from src.presentation.handlers.auth_handlers import start, button_auth, verificar_password
 from src.presentation.handlers.menu_handlers import menu, volver_menu
 from src.presentation.handlers.grupo_handlers import estado_grupos, detalle_grupo, detectar_agregacion_grupo, manejar_respuesta_grupo, confirmar_desvincular_grupo, ejecutar_desvincular_grupo
-from src.presentation.handlers.recaudacion_handlers import iniciar_recaudacion, procesar_recaudacion, confirmar_recaudacion, enviar_recaudacion, validar_comprobante
+from src.presentation.handlers.recaudacion_handlers import iniciar_recaudacion, procesar_recaudacion, confirmar_recaudacion, enviar_recaudacion, validar_comprobante, verificar_fechas_limite_job
 from src.presentation.handlers.minuta_handlers import redactar_minuta, recibir_contenido_minuta, generar_minuta_formato, enviar_minuta_grupo, despachar_minuta
 from src.presentation.handlers.asesoria_handlers import buzon_asesoria, responder_asesoria, ignorar_asesoria, detectar_solicitud_estudiante, enviar_recordatorio_asesoria, enviar_pregunta_asesoria
 from src.presentation.handlers.strike_handlers import control_strikes, ver_historial_strikes, monitorear_mensajes
@@ -104,6 +104,7 @@ def main():
     # Recordatorio cada 48 horas (172800 segundos)
     if application.job_queue:
         application.job_queue.run_repeating(enviar_recordatorio_asesoria, interval=172800, first=10)
+        application.job_queue.run_repeating(verificar_fechas_limite_job, interval=300, first=15)
 
     print("🚀 Delegado Virtual iniciado exitosamente!")
     application.run_polling(allowed_updates=Update.ALL_TYPES)
