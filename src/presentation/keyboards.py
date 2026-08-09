@@ -46,9 +46,10 @@ def get_grupos_list_keyboard(grupos: list) -> InlineKeyboardMarkup:
     keyboard.append([InlineKeyboardButton("🔙 Volver al menú", callback_data="volver_menu")])
     return InlineKeyboardMarkup(keyboard)
 
-def get_grupo_detalle_keyboard() -> InlineKeyboardMarkup:
-    keyboard = [
-        [InlineKeyboardButton("🔙 Volver a la lista de grupos", callback_data="menu_estado_grupos")],
-        [InlineKeyboardButton("🏠 Volver al menú principal", callback_data="volver_menu")]
-    ]
+def get_grupo_detalle_keyboard(chat_id: int = None) -> InlineKeyboardMarkup:
+    keyboard = []
+    if chat_id:
+        keyboard.append([InlineKeyboardButton("🔗 Desvincular grupo", callback_data=f"desvincular_grupo_{chat_id}")])
+    keyboard.append([InlineKeyboardButton("🔙 Volver a la lista de grupos", callback_data="menu_estado_grupos")])
+    keyboard.append([InlineKeyboardButton("🏠 Volver al menú principal", callback_data="volver_menu")])
     return InlineKeyboardMarkup(keyboard)

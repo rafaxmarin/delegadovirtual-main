@@ -2,6 +2,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 import json, re
 from src.infrastructure.ai.gemini_adapter import GeminiAdapter
+from src.presentation.auth_utils import verificar_pertenencia_grupo
 
 gemini = GeminiAdapter()
 
@@ -139,7 +140,10 @@ async def enviar_recaudacion(update: Update, context: ContextTypes.DEFAULT_TYPE)
     
     chat_id = int(query.data.replace("enviar_recaudacion_", ""))
     datos = context.user_data.get('recaudacion_datos', {})
-    
+
+    if not await verificar_pertenencia_grupo(chat_id, query.from_user.id, db, query):
+        return
+
     monto = float(str(datos['monto']).replace(',', '.'))
     db.crear_recaudacion(query.from_user.id, chat_id, str(datos['concepto']), monto, str(datos['banco']), str(datos['cedula']), str(datos['telefono']), str(datos['fecha_limite']))
     

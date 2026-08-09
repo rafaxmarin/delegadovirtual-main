@@ -1,6 +1,7 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 from telegram.error import TelegramError
+from src.presentation.auth_utils import verificar_pertenencia_grupo
 
 async def agregar_alumno(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Inicia el flujo para agregar un alumno"""
@@ -57,6 +58,10 @@ async def invitar_alumno_grupo(update: Update, context: ContextTypes.DEFAULT_TYP
     
     chat_id = int(query.data.replace("invitar_alumno_", ""))
     datos_alumno = context.user_data.get('datos_alumno')
+    db = context.bot_data['db']
+
+    if not await verificar_pertenencia_grupo(chat_id, query.from_user.id, db, query):
+        return
     
     if not datos_alumno:
         await query.edit_message_text("❌ No hay datos del alumno.")
@@ -146,6 +151,10 @@ async def listar_estudiantes_grupo(update: Update, context: ContextTypes.DEFAULT
     await query.answer()
     
     chat_id = int(query.data.replace("listar_estudiantes_", ""))
+    db = context.bot_data['db']
+
+    if not await verificar_pertenencia_grupo(chat_id, query.from_user.id, db, query):
+        return
     
     try:
         chat = await context.bot.get_chat(chat_id)
@@ -210,6 +219,10 @@ async def confirmar_eliminar_alumno(update: Update, context: ContextTypes.DEFAUL
     
     chat_id = int(query.data.replace("confirmar_eliminar_alumno_", ""))
     datos_estudiante = context.user_data.get('datos_eliminar')
+    db = context.bot_data['db']
+
+    if not await verificar_pertenencia_grupo(chat_id, query.from_user.id, db, query):
+        return
     
     if not datos_estudiante:
         await query.edit_message_text("❌ No hay datos del estudiante.")

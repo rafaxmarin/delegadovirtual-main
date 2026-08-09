@@ -2,6 +2,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 from telegram.error import TelegramError
 from src.presentation.keyboards import get_grupos_list_keyboard, get_grupo_detalle_keyboard
+from src.presentation.auth_utils import verificar_pertenencia_grupo
 
 async def estado_grupos(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Muestra la lista de grupos registrados por el profesor (Paso 1)"""
@@ -52,6 +53,9 @@ async def detalle_grupo(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=get_grupo_detalle_keyboard()
         )
         return
+
+    if not await verificar_pertenencia_grupo(chat_id, query.from_user.id, db, query):
+        return
         
     grupo = db.obtener_grupo(chat_id)
     nombre_grupo = grupo[1] if grupo else "Grupo"
@@ -73,7 +77,7 @@ async def detalle_grupo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.edit_message_text(
         mensaje,
         parse_mode='Markdown',
-        reply_markup=get_grupo_detalle_keyboard()
+        reply_markup=get_grupo_detalle_keyboard(chat_id)
     )
 
 async def detectar_agregacion_grupo(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -166,3 +170,77 @@ async def manejar_respuesta_grupo(update: Update, context: ContextTypes.DEFAULT_
             await query.edit_message_text("✅ Has rechazado el grupo. El bot ha salido del mismo.")
         except Exception as e:
             await query.edit_message_text(f"❌ Error al salir del grupo: {str(e)}")
+
+async def confirmar_desvincular_grupo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Muestra confirmación antes de desvincular un grupo"""
+    query = update.callback_query
+    await query.answer()
+    db = context.bot_data['db']
+
+    chat_id = int(query.data.replace("desvincular_grupo_", ""))
+
+    if not await verificar_pertenencia_grupo(chat_id, query.from_user.id, db, query):
+        return
+
+    grupo = db.obtener_grupo(chat_id)
+    nombre_grupo = grupo[1] if grupo else "el grupo"
+
+    keyboard = [
+        [
+            InlineKeyboardButton("✅ Sí, desvincular", callback_data=f"confirmar_desvincular_{chat_id}"),
+            InlineKeyboardButton("❌ Cancelar", callback_data=f"detalle_grupo_{chat_id}")
+        ]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    await query.edit_message_text(
+        f"⚠️ *¿Estás seguro de desvincular el grupo?*\n\n"
+        f"📚 *{nombre_grupo}*\n\n"
+        "Se eliminará el registro del grupo y el bot saldrá del mismo.\n"
+        "Esta acción no se puede deshacer.",
+        parse_mode='Markdown',
+        reply_markup=reply_markup
+    )
+
+async def ejecutar_desvincular_grupo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Ejecuta la desvinculación del grupo: despedida, leave_chat, eliminar BD"""
+    query = update.callback_query
+    await query.answer()
+    db = context.bot_data['db']
+
+    chat_id = int(query.data.replace("confirmar_desvincular_", ""))
+
+    if not await verificar_pertenencia_grupo(chat_id, query.from_user.id, db, query):
+        return
+
+    grupo = db.obtener_grupo(chat_id)
+    nombre_grupo = grupo[1] if grupo else "el grupo"
+
+    try:
+        # Enviar mensaje de despedida al grupo
+        try:
+            await context.bot.send_message(
+                chat_id,
+                "🤖 *El Delegado Virtual ha sido desvinculado de este grupo por el profesor.*\n\n"
+                "¡Gracias por usar el servicio!",
+                parse_mode='Markdown'
+            )
+        except Exception:
+            pass  # El bot podría no tener acceso al grupo
+
+        # El bot sale del grupo
+        try:
+            await context.bot.leave_chat(chat_id)
+        except Exception:
+            pass  # El bot podría ya no estar en el grupo
+
+        # Eliminar registro de la base de datos
+        db.eliminar_grupo(chat_id)
+
+        await query.edit_message_text(
+            f"✅ *Grupo desvinculado exitosamente*\n\n"
+            f"📚 *{nombre_grupo}* ha sido eliminado de tu lista de grupos.",
+            parse_mode='Markdown'
+        )
+    except Exception as e:
+        await query.edit_message_text(f"❌ Error al desvincular el grupo: {str(e)}")

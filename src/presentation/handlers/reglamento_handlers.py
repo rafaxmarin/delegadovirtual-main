@@ -2,6 +2,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 from telegram.error import TelegramError
 from src.infrastructure.ai.gemini_adapter import GeminiAdapter
+from src.presentation.auth_utils import verificar_pertenencia_grupo
 
 gemini = GeminiAdapter()
 
@@ -120,6 +121,8 @@ async def fijar_reglamento_grupo(update: Update, context: ContextTypes.DEFAULT_T
         )
     else:
         chat_id = int(data.replace("fijar_reglamento_", ""))
+        if not await verificar_pertenencia_grupo(chat_id, user.id, db, query):
+            return
         try:
             await fijar_en_grupo(context, chat_id, reglamento)
             await query.edit_message_text("✅ Reglamento fijado exitosamente.")

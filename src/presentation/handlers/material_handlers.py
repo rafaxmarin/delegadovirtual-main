@@ -1,6 +1,7 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 from src.infrastructure.ai.gemini_adapter import GeminiAdapter
+from src.presentation.auth_utils import verificar_pertenencia_grupo
 
 gemini = GeminiAdapter()
 
@@ -132,6 +133,10 @@ async def enviar_material(update: Update, context: ContextTypes.DEFAULT_TYPE):
     material = context.user_data.get('material')
     tipo = context.user_data.get('tipo_material')
     mensaje_intro = context.user_data.get('mensaje_intro', 'Material de estudio compartido por el profesor.')
+    db = context.bot_data['db']
+
+    if not await verificar_pertenencia_grupo(chat_id, query.from_user.id, db, query):
+        return
     
     if not material:
         await query.edit_message_text("❌ No hay material para enviar.")

@@ -2,6 +2,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ChatPer
 from telegram.ext import ContextTypes
 from datetime import datetime, timedelta
 from src.infrastructure.ai.gemini_adapter import GeminiAdapter
+from src.presentation.auth_utils import verificar_pertenencia_grupo
 
 gemini = GeminiAdapter()
 
@@ -65,6 +66,9 @@ async def ver_historial_strikes(update: Update, context: ContextTypes.DEFAULT_TY
     partes = data.split("_", 1)
     grupo_id = int(partes[0])
     estudiante_nombre = partes[1]
+
+    if not await verificar_pertenencia_grupo(grupo_id, query.from_user.id, db, query):
+        return
     
     historial = db.obtener_historial_strikes_por_nombre(estudiante_nombre, grupo_id)
     total = len(historial)

@@ -6,7 +6,7 @@ from src.infrastructure.database.sqlite_repository import SQLiteRepository
 
 from src.presentation.handlers.auth_handlers import start, button_auth, verificar_password
 from src.presentation.handlers.menu_handlers import menu, volver_menu
-from src.presentation.handlers.grupo_handlers import estado_grupos, detalle_grupo, detectar_agregacion_grupo, manejar_respuesta_grupo
+from src.presentation.handlers.grupo_handlers import estado_grupos, detalle_grupo, detectar_agregacion_grupo, manejar_respuesta_grupo, confirmar_desvincular_grupo, ejecutar_desvincular_grupo
 from src.presentation.handlers.recaudacion_handlers import iniciar_recaudacion, procesar_recaudacion, confirmar_recaudacion, enviar_recaudacion, validar_comprobante
 from src.presentation.handlers.minuta_handlers import redactar_minuta, recibir_contenido_minuta, generar_minuta_formato, enviar_minuta_grupo, despachar_minuta
 from src.presentation.handlers.asesoria_handlers import buzon_asesoria, responder_asesoria, ignorar_asesoria, detectar_solicitud_estudiante, enviar_recordatorio_asesoria, enviar_pregunta_asesoria
@@ -53,6 +53,8 @@ def main():
     # CALLBACKS DE GRUPOS
     application.add_handler(CallbackQueryHandler(detalle_grupo, pattern='^detalle_grupo_'))
     application.add_handler(CallbackQueryHandler(manejar_respuesta_grupo, pattern='^(aceptar_grupo_|rechazar_grupo_)'))
+    application.add_handler(CallbackQueryHandler(confirmar_desvincular_grupo, pattern='^desvincular_grupo_'))
+    application.add_handler(CallbackQueryHandler(ejecutar_desvincular_grupo, pattern='^confirmar_desvincular_'))
 
     # CALLBACKS DE ANUNCIOS
     application.add_handler(CallbackQueryHandler(confirmar_anuncio, pattern='^confirmar_anuncio$'))

@@ -1,6 +1,7 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 from src.infrastructure.ai.gemini_adapter import GeminiAdapter
+from src.presentation.auth_utils import verificar_pertenencia_grupo
 
 gemini = GeminiAdapter()
 
@@ -105,6 +106,10 @@ async def enviar_anuncio_grupo(update: Update, context: ContextTypes.DEFAULT_TYP
     
     chat_id = int(query.data.replace("enviar_anuncio_", ""))
     anuncio_formal = context.user_data.get('anuncio_formal')
+    db = context.bot_data['db']
+
+    if not await verificar_pertenencia_grupo(chat_id, query.from_user.id, db, query):
+        return
     
     if not anuncio_formal:
         await query.edit_message_text("❌ No hay anuncio para enviar.")

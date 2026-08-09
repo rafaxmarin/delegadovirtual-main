@@ -4,6 +4,7 @@ from telegram.ext import ContextTypes
 from src.infrastructure.ai.gemini_adapter import GeminiAdapter
 from src.infrastructure.documents.pdf_exporter import generar_pdf_apa
 from src.infrastructure.documents.docx_exporter import generar_word_apa
+from src.presentation.auth_utils import verificar_pertenencia_grupo
 
 gemini = GeminiAdapter()
 
@@ -113,6 +114,10 @@ async def despachar_minuta(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     chat_id = int(query.data.replace("despachar_minuta_", ""))
     archivo = context.user_data.get('archivo_minuta')
+    db = context.bot_data['db']
+
+    if not await verificar_pertenencia_grupo(chat_id, query.from_user.id, db, query):
+        return
     
     if not archivo:
         await query.edit_message_text("❌ No hay minuta para enviar.")

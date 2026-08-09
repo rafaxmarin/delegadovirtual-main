@@ -1,6 +1,7 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 from src.infrastructure.ai.gemini_adapter import GeminiAdapter
+from src.presentation.auth_utils import verificar_pertenencia_grupo
 
 gemini = GeminiAdapter()
 
@@ -141,7 +142,14 @@ async def ignorar_asesoria(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     solicitud_id = int(query.data.replace("ignorar_asesoria_", ""))
     db = context.bot_data['db']
-    
+
+    # Verificar que la asesoría pertenezca al profesor
+    solicitudes = db.obtener_asesorias_pendientes(query.from_user.id)
+    solicitud = next((s for s in solicitudes if s[0] == solicitud_id), None)
+    if not solicitud:
+        await query.edit_message_text("❌ No tienes permisos sobre esta solicitud.")
+        return
+
     db.marcar_asesoria_respondida(solicitud_id)
     await buzon_asesoria(update, context)
 

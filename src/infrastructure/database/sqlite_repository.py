@@ -127,7 +127,7 @@ class SQLiteRepository:
     
     def obtener_grupos_profesor(self, profesor_id: int) -> List[Tuple[int, str]]:
         if profesor_id is None:
-            return self.obtener_todos_los_grupos()
+            return []
         self.cursor.execute('SELECT chat_id, nombre FROM grupos WHERE profesor_id = ?', (profesor_id,))
         return self.cursor.fetchall()
 
@@ -137,6 +137,14 @@ class SQLiteRepository:
 
     def es_grupo_registrado(self, chat_id: int) -> bool:
         self.cursor.execute('SELECT 1 FROM grupos WHERE chat_id = ?', (chat_id,))
+        return self.cursor.fetchone() is not None
+
+    def es_grupo_de_profesor(self, chat_id: int, profesor_id: int) -> bool:
+        """Verifica que un grupo pertenezca a un profesor específico."""
+        self.cursor.execute(
+            'SELECT 1 FROM grupos WHERE chat_id = ? AND profesor_id = ?',
+            (chat_id, profesor_id)
+        )
         return self.cursor.fetchone() is not None
 
     def obtener_profesor_de_grupo(self, chat_id: int) -> Optional[int]:
