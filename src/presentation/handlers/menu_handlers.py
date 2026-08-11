@@ -21,7 +21,8 @@ async def menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "¡Hola! Selecciona una opción o utiliza los siguientes comandos en tu grupo:\n\n"
             "💸 *Recaudaciones y Pagos:*\n"
             "• `/recaudacion` — Consulta los datos de la recaudación activa del grupo.\n"
-            "• `/pago` — Valida tu captura de comprobante de pago en el grupo.\n\n"
+            "• `/pago` — Valida tu captura de comprobante de pago en el grupo.\n"
+            "• `/efectivo` — Registra un pago en efectivo al profesor en el grupo.\n\n"
             "❓ *Asesorías y Preguntas:*\n"
             "• `/pregunta [tu duda]` — Envía una duda directamente al buzón del profesor."
         )
@@ -109,11 +110,11 @@ async def estudiante_guia_pago_callback(update: Update, context: ContextTypes.DE
         await query.answer()
 
     guia = (
-        "📷 *GUÍA PARA REGISTRAR TU COMPROBANTE DE PAGO*\n\n"
+        "📷 *GUÍA PARA REGISTRAR TU PAGO*\n\n"
         "1. Entra al grupo de tu clase donde está el bot.\n"
-        "2. Envía la captura o imagen del comprobante de Pago Móvil.\n"
-        "3. Puedes adjuntarla acompañada del comando `/pago`.\n"
-        "4. La IA verificará los datos (Monto, Banco Destino, Ref, Fecha) y registrará tu pago en la lista en vivo automáticamente."
+        "2. *Si pagaste por Pago Móvil:* Envía la captura/imagen del comprobante (o usa `/pago`).\n"
+        "3. *Si pagaste en efectivo al profesor:* Ejecuta el comando `/efectivo` en el grupo.\n"
+        "4. El bot registrará tu pago en la lista en vivo en tiempo real."
     )
     keyboard = [[InlineKeyboardButton("🔙 Volver al menú", callback_data="volver_menu")]]
     await query.edit_message_text(guia, parse_mode='Markdown', reply_markup=InlineKeyboardMarkup(keyboard))

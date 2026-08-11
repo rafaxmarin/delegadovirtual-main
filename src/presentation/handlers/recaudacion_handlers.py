@@ -468,28 +468,8 @@ async def validar_comprobante(update: Update, context: ContextTypes.DEFAULT_TYPE
                 context.bot, chat_id, db, rec_id, concepto, monto_esperado, fecha_limite, mensaje_lista_id
             )
 
-            # 3. NOTIFICAR AL PROFESOR EN PRIVADO
-            total_pagos = db.contar_pagos(rec_id)
-            total_recaudado = total_pagos * monto_esperado
-            try:
-                chat_info = await context.bot.get_chat(chat_id)
-                nombre_grupo = chat_info.title
-            except:
-                nombre_grupo = "Grupo"
-
-            notificacion_profesor = (
-                f"💸 *NUEVO PAGO RECIBIDO Y VALIDADO*\n\n"
-                f"📚 *Grupo:* {nombre_grupo}\n"
-                f"📝 *Concepto:* {concepto}\n"
-                f"👤 *Estudiante:* {estudiante_nombre}\n"
-                f"🔢 *Verificación:* #{num_ref}\n"
-                f"💵 *Monto:* Bs. {monto_esperado:,.2f}\n\n"
-                f"📊 *Acumulado:* {total_pagos} pago(s) (Bs. {total_recaudado:,.2f})"
-            )
-            try:
-                await context.bot.send_message(profesor_id, notificacion_profesor, parse_mode='Markdown')
-            except Exception:
-                pass
+            # 3. VERIFICAR SI YA SE REALIZARON TODOS LOS PAGOS
+            await verificar_y_enviar_fin_recaudacion(context.bot, chat_id, db, rec_tuple)
 
         else:
             motivo = evaluacion.get('motivo_rechazo', 'La captura no cumple con los requisitos esperados.')
@@ -649,4 +629,101 @@ async def consultar_recaudacion_comando(update: Update, context: ContextTypes.DE
         parse_mode='Markdown',
         reply_to_message_id=update.message.message_id
     )
+
+async def verificar_y_enviar_fin_recaudacion(bot, chat_id: int, db, rec_tuple: tuple):
+    """Verifica si ya pagaron todos los estudiantes del grupo para enviar el informe final al profesor"""
+    rec_id = rec_tuple[0]
+    total_pagos = db.contar_pagos(rec_id)
+    try:
+        cant_miembros = await bot.get_chat_member_count(chat_id)
+        # En grupos de Telegram, los miembros incluyen al bot y al profesor.
+        # Por ende, los estudiantes esperados son cant_miembros - 2 (o al menos 1).
+        estudiantes_esperados = max(1, cant_miembros - 2)
+    except Exception as e:
+        print(f"⚠️ No se pudo obtener la cantidad de miembros del grupo: {e}")
+        estudiantes_esperados = None
+
+    if estudiantes_esperados and total_pagos >= estudiantes_esperados:
+        await enviar_informe_final(bot, db, rec_tuple, motivo_trigger="Todos los pagos han sido realizados")
+
+async def registrar_pago_efectivo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Registra un pago en efectivo para la recaudación activa del grupo (Comando /efectivo)"""
+    if not update.message:
+        return
+    
+    chat_type = update.effective_chat.type
+    chat_id = update.effective_chat.id
+    user = update.effective_user
+    db = context.bot_data['db']
+
+    if chat_type == 'private':
+        await update.message.reply_text(
+            "📌 *El comando /efectivo debe ejecutarse dentro del grupo de tu materia* para registrar el pago en efectivo.",
+            parse_mode='Markdown',
+            reply_to_message_id=update.message.message_id
+        )
+        return
+
+    rec_tuple = db.obtener_recaudacion_activa(chat_id)
+    if not rec_tuple:
+        await update.message.reply_text(
+            "⚠️ *No hay ninguna recaudación activa en este grupo en este momento.*",
+            parse_mode='Markdown',
+            reply_to_message_id=update.message.message_id
+        )
+        return
+
+    rec_id = rec_tuple[0]
+    concepto = rec_tuple[3]
+    monto_esperado = float(rec_tuple[4])
+    fecha_limite = rec_tuple[8]
+    mensaje_lista_id = rec_tuple[10] if len(rec_tuple) > 10 else None
+
+    # Determinar a qué estudiante se le asigna el pago
+    if update.message.reply_to_message and update.message.reply_to_message.from_user:
+        target_user = update.message.reply_to_message.from_user
+        estudiante_id = target_user.id
+        estudiante_nombre = target_user.full_name or (f"@{target_user.username}" if target_user.username else "Estudiante")
+    elif context.args:
+        estudiante_id = None
+        estudiante_nombre = " ".join(context.args).strip()
+    else:
+        estudiante_id = user.id
+        estudiante_nombre = user.full_name or (f"@{user.username}" if user.username else "Estudiante")
+
+    if db.estudiante_ya_pago(rec_id, estudiante_id, estudiante_nombre):
+        await update.message.reply_text(
+            f"⚠️ *{estudiante_nombre}*, ya tienes un pago registrado para la recaudación *{concepto}*.",
+            parse_mode='Markdown',
+            reply_to_message_id=update.message.message_id
+        )
+        return
+
+    fecha_pago = datetime.now().strftime("%d/%m/%Y %H:%M")
+    num_ref = "EFECTIVO"
+
+    db.registrar_pago(
+        recaudacion_id=rec_id,
+        estudiante_nombre=estudiante_nombre,
+        fecha_pago=fecha_pago,
+        estudiante_id=estudiante_id,
+        numero_verificacion=num_ref
+    )
+
+    await update.message.reply_text(
+        f"💵 *¡PAGO EN EFECTIVO REGISTRADO!*\n\n"
+        f"👤 *Estudiante:* {estudiante_nombre}\n"
+        f"🔢 *Ref:* #{num_ref}\n"
+        f"💵 *Monto:* Bs. {monto_esperado:,.2f}\n"
+        f"📅 *Fecha:* {fecha_pago}",
+        parse_mode='Markdown',
+        reply_to_message_id=update.message.message_id
+    )
+
+    await actualizar_lista_en_vivo(
+        context.bot, chat_id, db, rec_id, concepto, monto_esperado, fecha_limite, mensaje_lista_id
+    )
+
+    await verificar_y_enviar_fin_recaudacion(context.bot, chat_id, db, rec_tuple)
+
 

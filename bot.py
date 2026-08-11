@@ -13,10 +13,11 @@ from src.presentation.handlers.grupo_handlers import estado_grupos, detalle_grup
 from src.presentation.handlers.recaudacion_handlers import (
     menu_recaudacion, iniciar_recaudacion, procesar_recaudacion, confirmar_recaudacion,
     enviar_recaudacion, validar_comprobante, verificar_fechas_limite_job,
-    ver_reporte_recaudacion_menu, ver_reporte_recaudacion_grupo, consultar_recaudacion_comando
+    ver_reporte_recaudacion_menu, ver_reporte_recaudacion_grupo, consultar_recaudacion_comando,
+    registrar_pago_efectivo
 )
 from src.presentation.handlers.minuta_handlers import redactar_minuta, recibir_contenido_minuta, generar_minuta_formato, enviar_minuta_grupo, despachar_minuta
-from src.presentation.handlers.asesoria_handlers import buzon_asesoria, responder_asesoria, ignorar_asesoria, detectar_solicitud_estudiante, enviar_recordatorio_asesoria, enviar_pregunta_asesoria
+from src.presentation.handlers.asesoria_handlers import buzon_asesoria, responder_asesoria, ignorar_asesoria, detectar_solicitud_estudiante, enviar_pregunta_asesoria
 from src.presentation.handlers.strike_handlers import control_strikes, ver_historial_strikes, monitorear_mensajes
 from src.presentation.handlers.alumno_handlers import agregar_alumno, invitar_alumno_grupo, eliminar_alumno, listar_estudiantes_grupo, confirmar_eliminar_alumno
 from src.presentation.handlers.material_handlers import compartir_material, confirmar_material, enviar_material
@@ -64,6 +65,7 @@ def main():
     application.add_handler(CommandHandler('menu', menu))
     application.add_handler(CommandHandler('pregunta', enviar_pregunta_asesoria))
     application.add_handler(CommandHandler('pago', validar_comprobante))
+    application.add_handler(CommandHandler('efectivo', registrar_pago_efectivo))
     application.add_handler(CommandHandler('recaudacion', consultar_recaudacion_comando))
     application.add_handler(CommandHandler('api', config_api_comando))
 
@@ -152,9 +154,8 @@ def main():
         procesar_mensaje_natural
     ))
 
-    # Recordatorio cada 48 horas (172800 segundos)
+    # Jobs periódicos (Revisión de fechas límite cada 5 min)
     if application.job_queue:
-        application.job_queue.run_repeating(enviar_recordatorio_asesoria, interval=172800, first=10)
         application.job_queue.run_repeating(verificar_fechas_limite_job, interval=300, first=15)
 
     print("🚀 Delegado Virtual iniciado exitosamente!")
