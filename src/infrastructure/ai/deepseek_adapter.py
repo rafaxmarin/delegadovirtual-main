@@ -109,3 +109,16 @@ class DeepSeekAdapter:
     def responder_conversacion(self, mensaje: str, contexto: str = "") -> str:
         prompt = f"Contexto: {contexto}\nMensaje del profesor: {mensaje}\n\nResponde como el Delegado Virtual de la UDO Monagas de manera amable y concisa."
         return self._generar_respuesta(prompt)
+
+    def extraer_datos_recaudacion(self, mensaje: str, datos_actuales: dict) -> str:
+        prompt = f"""
+        Analiza el siguiente mensaje y extrae información de recaudación.
+        Mensaje del profesor: "{mensaje}"
+        Datos que ya tenemos: {json.dumps(datos_actuales, ensure_ascii=False)}
+        Identifica: concepto, monto, banco, cedula, telefono, fecha_limite.
+        Responde EXCLUSIVAMENTE en JSON:
+        {{"concepto": "...", "monto": 0, "banco": "...", "cedula": "...", "telefono": "...", "fecha_limite": "..."}}
+        Si un campo no aparece, usa "no_encontrado".
+        """
+        return self._generar_respuesta(prompt)
+

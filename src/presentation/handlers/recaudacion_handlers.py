@@ -77,16 +77,7 @@ async def procesar_recaudacion(update: Update, context: ContextTypes.DEFAULT_TYP
     
     try:
         datos_actuales = context.user_data.get('recaudacion_datos', {})
-        prompt = f"""
-        Analiza el siguiente mensaje y extrae información de recaudación.
-        Mensaje del profesor: "{mensaje}"
-        Datos que ya tenemos: {json.dumps(datos_actuales, ensure_ascii=False)}
-        Identifica: concepto, monto, banco, cedula, telefono, fecha_limite.
-        Responde EXCLUSIVAMENTE en JSON:
-        {{"concepto": "...", "monto": 0, "banco": "...", "cedula": "...", "telefono": "...", "fecha_limite": "..."}}
-        Si un campo no aparece, usa "no_encontrado".
-        """
-        resultado = gemini.model.generate_content(prompt).text.strip()
+        resultado = gemini.extraer_datos_recaudacion(mensaje, datos_actuales)
         resultado = resultado.replace('```json', '').replace('```', '').strip()
         
         try:

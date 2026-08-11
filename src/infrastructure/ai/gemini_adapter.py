@@ -225,3 +225,19 @@ class GeminiAdapter:
         """
         response = self.model.generate_content(prompt)
         return response.text.strip()
+
+    def extraer_datos_recaudacion(self, mensaje: str, datos_actuales: dict) -> str:
+        """Extrae los campos de recaudación desde el mensaje del profesor"""
+        import json
+        prompt = f"""
+        Analiza el siguiente mensaje y extrae información de recaudación.
+        Mensaje del profesor: "{mensaje}"
+        Datos que ya tenemos: {json.dumps(datos_actuales, ensure_ascii=False)}
+        Identifica: concepto, monto, banco, cedula, telefono, fecha_limite.
+        Responde EXCLUSIVAMENTE en JSON:
+        {{"concepto": "...", "monto": 0, "banco": "...", "cedula": "...", "telefono": "...", "fecha_limite": "..."}}
+        Si un campo no aparece, usa "no_encontrado".
+        """
+        response = self.model.generate_content(prompt)
+        return response.text.strip()
+

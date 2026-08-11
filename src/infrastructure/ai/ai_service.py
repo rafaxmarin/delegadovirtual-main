@@ -44,3 +44,7 @@ class AIService:
     def validar_comprobante_contra_recaudacion(self, image_input: Union[bytes, Image.Image], datos_recaudacion: dict) -> dict:
         # Visión: Gemini gestiona la lectura de comprobantes bancarios
         return GeminiAdapter().validar_comprobante_contra_recaudacion(image_input, datos_recaudacion)
+
+    def extraer_datos_recaudacion(self, mensaje: str, datos_actuales: dict) -> str:
+        return self._get_adapter().extraer_datos_recaudacion(mensaje, datos_actuales)
+
