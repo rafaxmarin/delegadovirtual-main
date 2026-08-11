@@ -4,7 +4,7 @@ from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQu
 from src.config import Config
 from src.infrastructure.database.sqlite_repository import SQLiteRepository
 
-from src.presentation.handlers.auth_handlers import start, button_auth, verificar_password
+from src.presentation.handlers.auth_handlers import start, button_auth, verificar_password, config_api_comando
 from src.presentation.handlers.menu_handlers import (
     menu, volver_menu, cerrar_menu, estudiante_recaudacion_callback,
     estudiante_guia_pago_callback, estudiante_guia_pregunta_callback
@@ -23,6 +23,11 @@ from src.presentation.handlers.material_handlers import compartir_material, conf
 from src.presentation.handlers.anuncio_handlers import emitir_anuncio, confirmar_anuncio, enviar_anuncio_grupo
 from src.presentation.handlers.reglamento_handlers import fijar_reglamento, confirmar_reglamento, fijar_reglamento_grupo
 from src.presentation.handlers.natural_handlers import procesar_mensaje_natural
+from src.presentation.handlers.ai_config_handlers import (
+    gemini_api_key_comando, gemini_model_comando,
+    deepseek_api_key_comando, deepseek_model_comando,
+    model_menu_comando, callback_model_menu
+)
 
 def main():
     Config.validate()
@@ -35,20 +40,48 @@ def main():
     db = SQLiteRepository(Config.DATABASE_PATH)
     print("✅ Base de datos SQLite inicializada")
 
+    # Restaurar configuraciones de IA desde la base de datos si existen
+    prov_db = db.obtener_config('ACTIVE_AI_PROVIDER')
+    if prov_db: Config.set_active_ai_provider(prov_db)
+
+    gem_key_db = db.obtener_config('GEMINI_API_KEY')
+    if gem_key_db: Config.set_gemini_api_key(gem_key_db)
+
+    gem_model_db = db.obtener_config('GEMINI_MODEL')
+    if gem_model_db: Config.set_gemini_model(gem_model_db)
+
+    ds_key_db = db.obtener_config('DEEPSEEK_API_KEY')
+    if ds_key_db: Config.set_deepseek_api_key(ds_key_db)
+
+    ds_model_db = db.obtener_config('DEEPSEEK_MODEL')
+    if ds_model_db: Config.set_deepseek_model(ds_model_db)
+
     application = Application.builder().token(token).read_timeout(30).write_timeout(30).build()
     application.bot_data['db'] = db
 
-    # COMANDOS
+    # COMANDOS GENERALES Y DE IA
     application.add_handler(CommandHandler('start', start))
     application.add_handler(CommandHandler('menu', menu))
     application.add_handler(CommandHandler('pregunta', enviar_pregunta_asesoria))
     application.add_handler(CommandHandler('pago', validar_comprobante))
     application.add_handler(CommandHandler('recaudacion', consultar_recaudacion_comando))
+    application.add_handler(CommandHandler('api', config_api_comando))
+
+    # COMANDOS DE CONFIGURACIÓN DE IA (GEMINI Y DEEPSEEK)
+    application.add_handler(CommandHandler('geminiapikey', gemini_api_key_comando))
+    application.add_handler(CommandHandler('geminimodel', gemini_model_comando))
+    application.add_handler(CommandHandler('deepseekapikey', deepseek_api_key_comando))
+    application.add_handler(CommandHandler('deepseekmodel', deepseek_model_comando))
+    application.add_handler(CommandHandler('model', model_menu_comando))
+
+    # CALLBACKS DE GESTIÓN DE IA
+    application.add_handler(CallbackQueryHandler(callback_model_menu, pattern='^(select_ai_provider_|menu_ai_comandos_guia)'))
 
     # CALLBACKS DEL MENÚ Y NAVEGACIÓN
     application.add_handler(CallbackQueryHandler(button_auth, pattern='^(soy_profesor|no_profesor)$'))
     application.add_handler(CallbackQueryHandler(estado_grupos, pattern='^menu_estado_grupos$'))
     application.add_handler(CallbackQueryHandler(menu_recaudacion, pattern='^menu_recaudacion$'))
+
     application.add_handler(CallbackQueryHandler(iniciar_recaudacion, pattern='^iniciar_crear_recaudacion$'))
     application.add_handler(CallbackQueryHandler(ver_reporte_recaudacion_menu, pattern='^ver_reporte_recaudacion_menu$'))
     application.add_handler(CallbackQueryHandler(ver_reporte_recaudacion_grupo, pattern='^reporte_rec_grupo_'))

@@ -1,12 +1,12 @@
 import os
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
-from src.infrastructure.ai.gemini_adapter import GeminiAdapter
+from src.infrastructure.ai.ai_service import AIService
 from src.infrastructure.documents.pdf_exporter import generar_pdf_apa
 from src.infrastructure.documents.docx_exporter import generar_word_apa
 from src.presentation.auth_utils import verificar_pertenencia_grupo
 
-gemini = GeminiAdapter()
+gemini = AIService()
 
 async def redactar_minuta(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Inicia el flujo para redactar una minuta"""

@@ -1,6 +1,6 @@
 from telegram import Update
 from telegram.ext import ContextTypes
-from src.infrastructure.ai.gemini_adapter import GeminiAdapter
+from src.infrastructure.ai.ai_service import AIService
 from src.presentation.handlers.auth_handlers import verificar_password
 from src.presentation.handlers.recaudacion_handlers import procesar_recaudacion
 from src.presentation.handlers.minuta_handlers import recibir_contenido_minuta
@@ -10,7 +10,8 @@ from src.presentation.handlers.material_handlers import recibir_material
 from src.presentation.handlers.anuncio_handlers import recibir_anuncio
 from src.presentation.handlers.reglamento_handlers import recibir_reglamento
 
-gemini = GeminiAdapter()
+gemini = AIService()
+
 
 async def procesar_mensaje_natural(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """ÚNICO handler de mensajes privados - Redirige según el flujo activo"""

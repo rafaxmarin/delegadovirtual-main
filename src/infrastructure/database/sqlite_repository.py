@@ -100,9 +100,18 @@ class SQLiteRepository:
                 PRIMARY KEY (grupo_id, fecha)
             )
         ''')
+
+        # Tabla de configuración del sistema (ej. API Keys)
+        self.cursor.execute('''
+            CREATE TABLE IF NOT EXISTS configuracion (
+                clave TEXT PRIMARY KEY,
+                valor TEXT
+            )
+        ''')
         
         self.conn.commit()
         self._migrar_esquema()
+
 
     def _migrar_esquema(self):
         """Asegura que columnas agregadas existan en bases de datos anteriores"""
@@ -341,6 +350,21 @@ class SQLiteRepository:
         )
         result = self.cursor.fetchone()
         return result[0] if result else 0
+
+    # Métodos para configuración clave-valor
+    def guardar_config(self, clave: str, valor: str):
+        self.cursor.execute('''
+            INSERT INTO configuracion (clave, valor)
+            VALUES (?, ?)
+            ON CONFLICT(clave) DO UPDATE SET valor = excluded.valor
+        ''', (clave, valor))
+        self.conn.commit()
+
+    def obtener_config(self, clave: str) -> Optional[str]:
+        self.cursor.execute('SELECT valor FROM configuracion WHERE clave = ?', (clave,))
+        res = self.cursor.fetchone()
+        return res[0] if res else None
     
     def close(self):
         self.conn.close()
+

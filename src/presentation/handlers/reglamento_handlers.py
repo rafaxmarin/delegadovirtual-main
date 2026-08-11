@@ -1,10 +1,10 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 from telegram.error import TelegramError
-from src.infrastructure.ai.gemini_adapter import GeminiAdapter
+from src.infrastructure.ai.ai_service import AIService
 from src.presentation.auth_utils import verificar_pertenencia_grupo
 
-gemini = GeminiAdapter()
+gemini = AIService()
 
 async def fijar_reglamento(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Inicia el flujo para fijar reglamento"""
