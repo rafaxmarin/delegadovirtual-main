@@ -48,8 +48,10 @@ async def gemini_api_key_comando(update: Update, context: ContextTypes.DEFAULT_T
 
     if exito:
         Config.set_gemini_api_key(nueva_key)
-        try: db.guardar_config('GEMINI_API_KEY', nueva_key)
-        except Exception: pass
+        try:
+            db.guardar_config('GEMINI_API_KEY', nueva_key)
+        except Exception as e:
+            print(f"⚠️ Error al guardar GEMINI_API_KEY en BD: {e}")
         await msg.edit_text(
             f"✅ *¡API de Gemini verificada y lista!*\n\n"
             f"• Clave: `{masked_key}`\n"
@@ -84,8 +86,10 @@ async def gemini_model_comando(update: Update, context: ContextTypes.DEFAULT_TYP
 
     nuevo_modelo = context.args[0].strip()
     Config.set_gemini_model(nuevo_modelo)
-    try: db.guardar_config('GEMINI_MODEL', nuevo_modelo)
-    except Exception: pass
+    try:
+        db.guardar_config('GEMINI_MODEL', nuevo_modelo)
+    except Exception as e:
+        print(f"⚠️ Error al guardar GEMINI_MODEL en BD: {e}")
 
     await update.message.reply_text(
         f"✅ *Modelo de Gemini actualizado con éxito:*\n`{nuevo_modelo}`",
@@ -135,8 +139,10 @@ async def deepseek_api_key_comando(update: Update, context: ContextTypes.DEFAULT
 
     if exito:
         Config.set_deepseek_api_key(nueva_key)
-        try: db.guardar_config('DEEPSEEK_API_KEY', nueva_key)
-        except Exception: pass
+        try:
+            db.guardar_config('DEEPSEEK_API_KEY', nueva_key)
+        except Exception as e:
+            print(f"⚠️ Error al guardar DEEPSEEK_API_KEY en BD: {e}")
         await msg.edit_text(
             f"✅ *¡API de DeepSeek verificada y lista!*\n\n"
             f"• Clave: `{masked_key}`\n"
@@ -171,8 +177,10 @@ async def deepseek_model_comando(update: Update, context: ContextTypes.DEFAULT_T
 
     nuevo_modelo = context.args[0].strip()
     Config.set_deepseek_model(nuevo_modelo)
-    try: db.guardar_config('DEEPSEEK_MODEL', nuevo_modelo)
-    except Exception: pass
+    try:
+        db.guardar_config('DEEPSEEK_MODEL', nuevo_modelo)
+    except Exception as e:
+        print(f"⚠️ Error al guardar DEEPSEEK_MODEL en BD: {e}")
 
     await update.message.reply_text(
         f"✅ *Modelo de DeepSeek actualizado con éxito:*\n`{nuevo_modelo}`",
@@ -243,8 +251,10 @@ async def callback_model_menu(update: Update, context: ContextTypes.DEFAULT_TYPE
     if data.startswith("select_ai_provider_"):
         prov = data.replace("select_ai_provider_", "")
         Config.set_active_ai_provider(prov)
-        try: db.guardar_config('ACTIVE_AI_PROVIDER', prov)
-        except Exception: pass
+        try:
+            db.guardar_config('ACTIVE_AI_PROVIDER', prov)
+        except Exception as e:
+            print(f"⚠️ Error al guardar ACTIVE_AI_PROVIDER en BD: {e}")
         
         texto, reply_markup = construir_menu_modelos_texto()
         await query.edit_message_text(
