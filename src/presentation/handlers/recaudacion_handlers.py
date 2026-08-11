@@ -177,23 +177,25 @@ async def enviar_recaudacion(update: Update, context: ContextTypes.DEFAULT_TYPE)
     mensaje_anuncio = (
         f"💸 *NUEVA RECAUDACIÓN AUTORIZADA*\n\n"
         f"📝 *Concepto:* {datos['concepto']}\n"
-        f"💵 *Monto requerimiento:* Bs. {monto:,.2f}\n\n"
+        f"💵 *Monto requerimiento:* `Bs. {monto:,.2f}`\n\n"
         f"💳 *DATOS DE PAGO MÓVIL (DESTINO):*\n"
-        f"🏦 *Banco:* {datos['banco']}\n"
-        f"🪪 *Cédula:* {datos['cedula']}\n"
-        f"📱 *Teléfono:* {datos['telefono']}\n\n"
+        f"🏦 *Banco:* `{datos['banco']}`\n"
+        f"🪪 *Cédula:* `{datos['cedula']}`\n"
+        f"📱 *Teléfono:* `{datos['telefono']}`\n\n"
         f"⏰ *Fecha Límite:* {datos['fecha_limite']}\n\n"
-        f"📷 *INSTRUCCIONES DE VERIFICACIÓN (IA):*\n"
-        f"Para registrar tu pago, envía la captura del comprobante a este grupo.\n"
-        f"La imagen debe mostrar claramente:\n"
-        f"• Fecha y hora de la transacción\n"
-        f"• Tu nombre o titular origen\n"
-        f"• Número de referencia / transacción\n"
-        f"• Banco destino (*DEBE ser {datos['banco']}*)\n"
-        f"• Monto correcto (Bs. {monto:,.2f})"
+        f"📌 *INSTRUCCIONES DE REGISTRO DE PAGO:*\n"
+        f"• 📲 *Pago Móvil:* Envía la captura del comprobante a este grupo (o usa el comando `/pago`).\n"
+        f"  La imagen debe mostrar: Fecha/hora, titular origen, referencia, banco destino (*DEBE ser {datos['banco']}*) y monto (`Bs. {monto:,.2f}`).\n"
+        f"• 💵 *Pago en Efectivo:* Si le pagaste en efectivo al profesor, ejecuta el comando `/efectivo` en este grupo."
     )
     
-    msg_anuncio = await context.bot.send_message(chat_id, mensaje_anuncio, parse_mode='Markdown')
+    keyboard_anuncio = [[InlineKeyboardButton("📋 Copiar Datos de Pago", callback_data=f"copiar_datos_pago_{rec_id}")]]
+    msg_anuncio = await context.bot.send_message(
+        chat_id,
+        mensaje_anuncio,
+        parse_mode='Markdown',
+        reply_markup=InlineKeyboardMarkup(keyboard_anuncio)
+    )
     try: await context.bot.pin_chat_message(chat_id, msg_anuncio.message_id)
     except: pass
 
@@ -604,22 +606,67 @@ async def consultar_recaudacion_comando(update: Update, context: ContextTypes.DE
     mensaje_info = (
         f"💸 *RECAUDACIÓN ACTIVA DEL GRUPO*\n\n"
         f"📝 *Concepto:* {concepto}\n"
-        f"💵 *Monto requerimiento:* Bs. {monto:,.2f}\n\n"
+        f"💵 *Monto requerimiento:* `Bs. {monto:,.2f}`\n\n"
         f"💳 *DATOS DE PAGO MÓVIL (DESTINO):*\n"
-        f"🏦 *Banco:* {banco}\n"
-        f"🪪 *Cédula:* {cedula}\n"
-        f"📱 *Teléfono:* {telefono}\n\n"
+        f"🏦 *Banco:* `{banco}`\n"
+        f"🪪 *Cédula:* `{cedula}`\n"
+        f"📱 *Teléfono:* `{telefono}`\n\n"
         f"⏰ *Fecha Límite:* {fecha_limite}\n"
         f"👥 *Pagos validados hasta ahora:* {total_pagados}\n\n"
-        f"📷 *INSTRUCCIONES DE REGISTRO:*\n"
-        f"Envía la captura de tu comprobante a este grupo (o usa el comando `/pago` adjuntando la imagen) para que la IA lo valide."
+        f"📌 *INSTRUCCIONES DE REGISTRO DE PAGO:*\n"
+        f"• 📲 *Pago Móvil:* Envía la captura de tu comprobante a este grupo (o usa `/pago` adjuntando la imagen) para validación por IA.\n"
+        f"• 💵 *Pago en Efectivo:* Si pagaste en efectivo al profesor, ejecuta el comando `/efectivo` en este grupo."
     )
 
+    keyboard = [[InlineKeyboardButton("📋 Copiar Datos de Pago", callback_data=f"copiar_datos_pago_{rec_id}")]]
     await update.message.reply_text(
         mensaje_info,
         parse_mode='Markdown',
-        reply_to_message_id=update.message.message_id
+        reply_to_message_id=update.message.message_id,
+        reply_markup=InlineKeyboardMarkup(keyboard)
     )
+
+async def copiar_datos_pago_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Envía un bloque exclusivo de datos en formato código para copiar con un solo toque"""
+    query = update.callback_query
+    if not query:
+        return
+
+    await query.answer("📋 Toca cualquier dato para copiarlo al portapapeles.")
+
+    rec_id = int(query.data.replace("copiar_datos_pago_", ""))
+    db = context.bot_data['db']
+
+    db.cursor.execute('SELECT concepto, monto, banco, cedula, telefono FROM recaudaciones WHERE id = ?', (rec_id,))
+    row = db.cursor.fetchone()
+    if not row:
+        return
+
+    concepto, monto, banco, cedula, telefono = row
+    monto_str = f"{float(monto):,.2f}"
+
+    msg_copiar = (
+        f"📋 *DATOS RÁPIDOS DE PAGO — {concepto}*\n"
+        f"*(Toca sobre cualquier dato para copiarlo)*\n\n"
+        f"🏦 *Banco:* `{banco}`\n"
+        f"🪪 *Cédula:* `{cedula}`\n"
+        f"📱 *Teléfono:* `{telefono}`\n"
+        f"💵 *Monto:* `{monto_str}`"
+    )
+
+    try:
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text=msg_copiar,
+            parse_mode='Markdown',
+            reply_to_message_id=query.message.message_id if query.message else None
+        )
+    except Exception:
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text=msg_copiar,
+            parse_mode='Markdown'
+        )
 
 async def verificar_y_enviar_fin_recaudacion(bot, chat_id: int, db, rec_tuple: tuple):
     """Verifica si ya pagaron todos los estudiantes del grupo para enviar el informe final al profesor"""

@@ -84,6 +84,7 @@ async def estudiante_recaudacion_callback(update: Update, context: ContextTypes.
     rec_tuple = db.obtener_recaudacion_activa(chat_id)
     if not rec_tuple:
         texto = "⚠️ *No hay ninguna recaudación activa en este grupo en este momento.*"
+        keyboard = [[InlineKeyboardButton("🔙 Volver al menú", callback_data="volver_menu")]]
     else:
         rec_id, profesor_id, g_id, concepto, monto, banco, cedula, telefono, fecha_limite, activa = rec_tuple[:10]
         monto = float(monto)
@@ -92,15 +93,18 @@ async def estudiante_recaudacion_callback(update: Update, context: ContextTypes.
         texto = (
             f"💸 *RECAUDACIÓN ACTIVA DEL GRUPO*\n\n"
             f"📝 *Concepto:* {concepto}\n"
-            f"💵 *Monto requerimiento:* Bs. {monto:,.2f}\n\n"
+            f"💵 *Monto requerimiento:* `Bs. {monto:,.2f}`\n\n"
             f"💳 *DATOS DE PAGO MÓVIL (DESTINO):*\n"
-            f"🏦 *Banco:* {banco}\n"
-            f"🪪 *Cédula:* {cedula}\n"
-            f"📱 *Teléfono:* {telefono}\n\n"
+            f"🏦 *Banco:* `{banco}`\n"
+            f"🪪 *Cédula:* `{cedula}`\n"
+            f"📱 *Teléfono:* `{telefono}`\n\n"
             f"⏰ *Fecha Límite:* {fecha_limite}\n"
             f"👥 *Pagos validados:* {total_pagados}"
         )
-    keyboard = [[InlineKeyboardButton("🔙 Volver al menú", callback_data="volver_menu")]]
+        keyboard = [
+            [InlineKeyboardButton("📋 Copiar Datos de Pago", callback_data=f"copiar_datos_pago_{rec_id}")],
+            [InlineKeyboardButton("🔙 Volver al menú", callback_data="volver_menu")]
+        ]
     await query.edit_message_text(texto, parse_mode='Markdown', reply_markup=InlineKeyboardMarkup(keyboard))
 
 async def estudiante_guia_pago_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
