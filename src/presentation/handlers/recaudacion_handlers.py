@@ -711,15 +711,18 @@ async def copiar_datos_pago_callback(update: Update, context: ContextTypes.DEFAU
 
     msg_copiar = (
         f"📋 *DATOS DE PAGO MÓVIL — {concepto}*\n"
-        f"*(Toca sobre cada casilla en orden para pegarlo en tu banco)*\n\n"
-        f"1️⃣ *Código de Banco:* ({banco})\n"
-        f"`{cod_banco}`\n\n"
-        f"2️⃣ *Cédula / RIF:*\n"
-        f"`{ced_clean}`\n\n"
-        f"3️⃣ *Teléfono:*\n"
-        f"`{tel_clean}`\n\n"
-        f"4️⃣ *Monto:*\n"
-        f"`{monto_clean}`"
+        f"*(Toca la caja de texto para copiar todos los datos al portapapeles)*:\n\n"
+        f"```\n"
+        f"{cod_banco}\n"
+        f"{ced_clean}\n"
+        f"{tel_clean}\n"
+        f"{monto_clean}\n"
+        f"```\n\n"
+        f"👇 *O toca individualmente por campo:* \n"
+        f"• Banco ({banco}): `{cod_banco}`\n"
+        f"• Cédula/RIF: `{ced_clean}`\n"
+        f"• Teléfono: `{tel_clean}`\n"
+        f"• Monto: `{monto_clean}`"
     )
 
     try:
