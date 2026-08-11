@@ -710,19 +710,12 @@ async def copiar_datos_pago_callback(update: Update, context: ContextTypes.DEFAU
     monto_clean = f"{float(monto):.2f}"
 
     msg_copiar = (
-        f"📋 *DATOS DE PAGO MÓVIL — {concepto}*\n"
-        f"*(Toca la caja de texto para copiar todos los datos al portapapeles)*:\n\n"
         f"```\n"
         f"{cod_banco}\n"
         f"{ced_clean}\n"
         f"{tel_clean}\n"
         f"{monto_clean}\n"
-        f"```\n\n"
-        f"👇 *O toca individualmente por campo:* \n"
-        f"• Banco ({banco}): `{cod_banco}`\n"
-        f"• Cédula/RIF: `{ced_clean}`\n"
-        f"• Teléfono: `{tel_clean}`\n"
-        f"• Monto: `{monto_clean}`"
+        f"```"
     )
 
     try:
