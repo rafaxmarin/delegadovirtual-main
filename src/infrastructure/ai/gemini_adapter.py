@@ -183,15 +183,16 @@ class GeminiAdapter:
     def detectar_contenido_inapropiado(self, mensaje: str) -> str:
         """Detecta si un mensaje contiene contenido inapropiado"""
         prompt = f"""
-        Analiza si el siguiente mensaje contiene:
-        - Malas palabras u obscenidades
-        - Lenguaje ofensivo o discriminatorio
-        - Spam o contenido no educativo
+        Analiza si el siguiente mensaje de un grupo universitario contiene:
+        - Malas palabras, obscenidades o groserías
+        - Lenguaje ofensivo, insultos o discriminatorio
+        - Spam o contenido vulgar
         
-        Mensaje: {mensaje}
+        Mensaje: "{mensaje}"
         
-        Responde SOLO "SI" o "NO". Si es SI, añade el motivo en una palabra.
-        Ejemplo: "SI - obscenidades" o "NO"
+        Responde STRICTAMENTE en uno de estos dos formatos:
+        "SI - [motivo breve]" (ejemplo: "SI - malas palabras", "SI - insultos")
+        o únicamente "NO".
         """
         response = self.model.generate_content(prompt)
         return response.text.strip()

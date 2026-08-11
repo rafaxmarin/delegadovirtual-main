@@ -99,8 +99,15 @@ async def ver_historial_strikes(update: Update, context: ContextTypes.DEFAULT_TY
         reply_markup=reply_markup
     )
 
+PALABRAS_OFENSIVAS = [
+    'mierda', 'puta', 'puto', 'pendejo', 'pendeja', 'coño', 'maldito', 'maldita',
+    'mamaguevo', 'mamagüevo', 'mamaguebo', 'marico', 'marica', 'idiota', 'estúpido',
+    'estupido', 'estúpida', 'estupida', 'imbécil', 'imbecil', 'perra', 'bobo',
+    'huevón', 'huevon', 'guevón', 'guevon', 'coñodemadre', 'verga'
+]
+
 async def monitorear_mensajes(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Monitorea mensajes en grupos (CORREGIDO ES_GRUPO_REGISTRADO Y CHATPERMISSIONS)"""
+    """Monitorea mensajes en grupos e impone strikes si hay lenguaje o contenido inapropiado"""
     chat = update.effective_chat
     user = update.effective_user
     message = update.message
@@ -112,11 +119,15 @@ async def monitorear_mensajes(update: Update, context: ContextTypes.DEFAULT_TYPE
     if not message:
         return
     
-    # 🔴 CORRECCIÓN: Verificar si el grupo está registrado correctamente
     if not db.es_grupo_registrado(chat.id):
         return
     
     if user.is_bot:
+        return
+
+    # Excluir de strikes al profesor del grupo o profesores verificados
+    profesor_id = db.obtener_profesor_de_grupo(chat.id)
+    if user.id == profesor_id or db.es_profesor_verificado(user.id):
         return
     
     contenido = ""
@@ -129,34 +140,63 @@ async def monitorear_mensajes(update: Update, context: ContextTypes.DEFAULT_TYPE
     
     if not contenido:
         return
-    
-    try:
-        resultado = gemini.detectar_contenido_inapropiado(contenido)
-        
-        if resultado.startswith("SI"):
-            motivo = resultado.replace("SI - ", "") if " - " in resultado else "Contenido inapropiado"
+
+    es_inapropiado = False
+    motivo = "Uso de lenguaje inapropiado"
+
+    # 1. Verificación rápida local de groserías conocidas
+    import re
+    texto_clean = re.sub(r'[^\w\s]', '', contenido.lower())
+    palabras = texto_clean.split()
+    for p in palabras:
+        if p in PALABRAS_OFENSIVAS:
+            es_inapropiado = True
+            motivo = f"Lenguaje inapropiado ('{p}')"
+            break
+
+    # 2. Verificación por IA si la revisión local no la detectó
+    if not es_inapropiado and len(contenido.strip()) > 2:
+        try:
+            resultado = gemini.detectar_contenido_inapropiado(contenido)
+            res_clean = re.sub(r'[ÁÁáàâä]', 'A', re.sub(r'[ÉÉéèêë]', 'E', re.sub(r'[ÍÍíìîï]', 'I', re.sub(r'[ÓÓóòôö]', 'O', re.sub(r'[ÚÚúùûü]', 'U', resultado.upper())))))
+            
+            if res_clean.startswith("SI") or "SI -" in res_clean or "SI:" in res_clean or "INAPROPIADO" in res_clean:
+                es_inapropiado = True
+                if " - " in resultado:
+                    motivo = resultado.split(" - ", 1)[1].strip()
+                elif ":" in resultado:
+                    motivo = resultado.split(":", 1)[1].strip()
+                else:
+                    motivo = "Contenido inapropiado detectado por IA"
+        except Exception as e:
+            print(f"⚠️ Error en análisis IA para strikes: {e}")
+
+    if es_inapropiado:
+        try:
             strikes_actuales = db.obtener_strikes_estudiante(user.id, chat.id)
             nuevo_strike = strikes_actuales + 1
             
-            db.agregar_strike(user.id, user.full_name, chat.id, motivo)
+            db.agregar_strike(user.id, user.full_name or f"Estudiante {user.id}", chat.id, motivo)
+            print(f"⚡ Strike registrado a {user.full_name} (ID: {user.id}) en grupo {chat.id}. Total strikes: {nuevo_strike}")
             
             if nuevo_strike == 1:
                 await message.reply_text(
-                    f"⚠️ *STRIKE 1/3 - {user.full_name}*\n"
-                    f"Motivo: {motivo}\n"
-                    "Por favor, mantén el respeto en el grupo.",
-                    parse_mode='Markdown'
+                    f"⚠️ *STRIKE 1/3 — {user.full_name}*\n"
+                    f"📝 *Motivo:* {motivo}\n\n"
+                    "Por favor, mantén el respeto y el lenguaje adecuado en el grupo.",
+                    parse_mode='Markdown',
+                    reply_to_message_id=message.message_id
                 )
             elif nuevo_strike == 2:
                 await message.reply_text(
-                    f"⚠️ *STRIKE 2/3 - {user.full_name}*\n"
-                    f"Motivo: {motivo}\n"
-                    "Último aviso. Un strike más y no podrás escribir por 24 horas.",
-                    parse_mode='Markdown'
+                    f"⚠️ *STRIKE 2/3 — {user.full_name}*\n"
+                    f"📝 *Motivo:* {motivo}\n\n"
+                    "⚠️ *¡Último aviso!* Un strike más y serás silenciado por 24 horas.",
+                    parse_mode='Markdown',
+                    reply_to_message_id=message.message_id
                 )
             elif nuevo_strike >= 3:
                 try:
-                    # 🔴 CORRECCIÓN: Usar ChatPermissions en lugar de un diccionario plano
                     permisos = ChatPermissions(
                         can_send_messages=False,
                         can_send_media_messages=False,
@@ -171,16 +211,18 @@ async def monitorear_mensajes(update: Update, context: ContextTypes.DEFAULT_TYPE
                     )
                     
                     await message.reply_text(
-                        f"🚫 *RESTRICCIÓN - {user.full_name}*\n"
-                        f"Has alcanzado los 3 strikes.\n"
-                        "No podrás escribir en este grupo durante 24 horas.",
-                        parse_mode='Markdown'
+                        f"🚫 *RESTRICCIÓN ALCANZADA (3/3 STRIKES) — {user.full_name}*\n\n"
+                        f"Has sido silenciado en este grupo durante 24 horas por faltas consecutivas al reglamento.",
+                        parse_mode='Markdown',
+                        reply_to_message_id=message.message_id
                     )
                 except Exception as e:
+                    print(f"⚠️ No se pudo silenciar al estudiante en Telegram: {e}")
                     await message.reply_text(
-                        "⚠️ El estudiante ha alcanzado 3 strikes pero no se pudo restringir. "
-                        "Verifica que el bot tenga permisos de administrador."
+                        f"⚠️ *STRIKE 3/3 — {user.full_name}*\n"
+                        f"El estudiante alcanzó 3 strikes pero el bot no posee permisos de administrador para silenciarlo.",
+                        reply_to_message_id=message.message_id
                     )
-            
-    except Exception:
-        pass
+        except Exception as e:
+            print(f"❌ Error al procesar strike: {e}")
+

@@ -99,7 +99,7 @@ class DeepSeekAdapter:
         return self._generar_respuesta(prompt)
 
     def detectar_contenido_inapropiado(self, mensaje: str) -> str:
-        prompt = f"Analiza si este mensaje tiene malas palabras, spam u ofensas: '{mensaje}'. Responde SOLO 'SI - motivo' o 'NO'."
+        prompt = f"Analiza si el siguiente mensaje de un grupo universitario contiene malas palabras, insultos o lenguaje ofensivo: '{mensaje}'. Responde estrictamente 'SI - [motivo breve]' o únicamente 'NO'."
         return self._generar_respuesta(prompt)
 
     def es_material_inapropiado(self, descripcion: str) -> str:
