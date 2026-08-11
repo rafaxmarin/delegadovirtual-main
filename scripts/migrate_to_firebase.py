@@ -4,6 +4,11 @@ import sqlite3
 
 # Añadir el directorio raíz al PATH para poder importar los módulos de src
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+if sys.platform == 'win32':
+    try:
+        sys.stdout.reconfigure(encoding='utf-8')
+    except Exception:
+        pass
 
 from src.config import Config
 from src.infrastructure.database.firebase_repository import FirebaseRepository
