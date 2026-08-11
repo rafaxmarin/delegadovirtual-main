@@ -1,6 +1,6 @@
 # Uso de la Inteligencia Artificial (Google Gemini) en Delegado Virtual
 
-La variable de entorno `GEMINI_API_KEY` le otorga capacidades de Inteligencia Artificial al bot mediante el modelo **Google Gemini 2.5 Flash**. A continuación se detallan las 6 funciones principales donde se utiliza la IA dentro del sistema:
+La variable de entorno `GEMINI_API_KEY` le otorga capacidades de Inteligencia Artificial al bot mediante el modelo **Google Gemini 2.0 Flash** (configurable mediante `GEMINI_MODEL`). A continuación se detallan las 6 funciones principales donde se utiliza la IA dentro del sistema:
 
 ---
 

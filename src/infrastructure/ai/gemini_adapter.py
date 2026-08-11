@@ -5,11 +5,12 @@ from PIL import Image
 from src.config import Config
 
 class GeminiAdapter:
-    def __init__(self, api_key: str = None):
+    def __init__(self, api_key: str = None, model_name: str = None):
         key = api_key or Config.GEMINI_API_KEY
         if key:
             genai.configure(api_key=key)
-        self.model = genai.GenerativeModel('gemini-2.5-flash')
+        selected_model = model_name or getattr(Config, 'GEMINI_MODEL', 'gemini-2.0-flash')
+        self.model = genai.GenerativeModel(selected_model)
 
     def estructurar_texto_formal(self, texto: str) -> str:
         """Convierte texto informal en un anuncio formal y respetuoso"""

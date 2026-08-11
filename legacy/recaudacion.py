@@ -94,7 +94,8 @@ async def procesar_recaudacion(update: Update, context: ContextTypes.DEFAULT_TYP
         Si un campo no aparece, usa "no_encontrado".
         """
         
-        model = genai.GenerativeModel('gemini-1.5-flash')
+        model_name = os.getenv('GEMINI_MODEL', 'gemini-2.0-flash')
+        model = genai.GenerativeModel(model_name)
         response = model.generate_content(prompt)
         resultado = response.text.strip()
         
