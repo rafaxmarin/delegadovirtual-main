@@ -13,3 +13,6 @@ reportlab==4.0.4
 
 # Procesamiento de imágenes (usado por Gemini para validar comprobantes)
 Pillow>=10.0.0
+
+# Base de datos Firebase
+firebase-admin>=6.0.0

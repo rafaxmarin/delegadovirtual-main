@@ -2,7 +2,7 @@ import os
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters
 from src.config import Config
-from src.infrastructure.database.sqlite_repository import SQLiteRepository
+from src.infrastructure.database.factory import get_repository
 
 from src.presentation.handlers.auth_handlers import start, button_auth, verificar_password, config_api_comando
 from src.presentation.handlers.menu_handlers import (
@@ -38,8 +38,7 @@ def main():
         return
 
     print(f"🤖 Iniciando {Config.APP_NAME} v{Config.VERSION} (Clean & Hexagonal Architecture)...")
-    db = SQLiteRepository(Config.DATABASE_PATH)
-    print("✅ Base de datos SQLite inicializada")
+    db = get_repository()
 
     # Restaurar configuraciones de IA desde la base de datos si existen
     prov_db = db.obtener_config('ACTIVE_AI_PROVIDER')
