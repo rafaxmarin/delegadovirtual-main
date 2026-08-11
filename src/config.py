@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 class Config:
-    VERSION: str = "2.0.0"
+    VERSION: str = "2.1.0"
     APP_NAME: str = "Delegado Virtual"
     TELEGRAM_BOT_TOKEN: str = os.getenv('TELEGRAM_BOT_TOKEN', '')
     ACTIVE_AI_PROVIDER: str = os.getenv('ACTIVE_AI_PROVIDER', 'gemini')
