@@ -9,7 +9,7 @@ class GeminiAdapter:
         key = api_key or Config.GEMINI_API_KEY
         if key:
             genai.configure(api_key=key)
-        selected_model = model_name or getattr(Config, 'GEMINI_MODEL', 'gemini-2.0-flash')
+        selected_model = model_name or getattr(Config, 'GEMINI_MODEL', 'gemini-flash-latest')
         self.model = genai.GenerativeModel(selected_model)
 
     def estructurar_texto_formal(self, texto: str) -> str:
