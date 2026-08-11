@@ -1,6 +1,7 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 from src.presentation.keyboards import get_menu_keyboard, get_estudiante_menu_keyboard
+from src.presentation.handlers.recaudacion_handlers import obtener_codigo_banco, limpiar_cedula, limpiar_telefono
 
 async def menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Maneja el comando /menu y despliega el menú (Profesor o Estudiante según perfil)"""
@@ -90,14 +91,21 @@ async def estudiante_recaudacion_callback(update: Update, context: ContextTypes.
         monto = float(monto)
         pagos = db.obtener_pagos_recaudacion(rec_id)
         total_pagados = len(pagos)
+
+        cod_banco = obtener_codigo_banco(str(banco))
+        ced_clean = limpiar_cedula(str(cedula))
+        tel_clean = limpiar_telefono(str(telefono))
+        monto_clean = f"{monto:.2f}"
+
         texto = (
             f"💸 *RECAUDACIÓN ACTIVA DEL GRUPO*\n\n"
             f"📝 *Concepto:* {concepto}\n"
-            f"💵 *Monto requerimiento:* `Bs. {monto:,.2f}`\n\n"
-            f"💳 *DATOS DE PAGO MÓVIL (DESTINO):*\n"
-            f"🏦 *Banco:* `{banco}`\n"
-            f"🪪 *Cédula:* `{cedula}`\n"
-            f"📱 *Teléfono:* `{telefono}`\n\n"
+            f"💵 *Monto requerimiento:* Bs. {monto:,.2f}\n\n"
+            f"💳 *DATOS PARA PAGO MÓVIL (DESTINO):*\n"
+            f"1️⃣ *Código de Banco ({banco}):*\n`{cod_banco}`\n"
+            f"2️⃣ *Cédula / RIF:*\n`{ced_clean}`\n"
+            f"3️⃣ *Teléfono:*\n`{tel_clean}`\n"
+            f"4️⃣ *Monto:*\n`{monto_clean}`\n\n"
             f"⏰ *Fecha Límite:* {fecha_limite}\n"
             f"👥 *Pagos validados:* {total_pagados}"
         )

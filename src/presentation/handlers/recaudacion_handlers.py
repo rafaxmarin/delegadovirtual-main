@@ -7,6 +7,58 @@ from src.presentation.auth_utils import verificar_pertenencia_grupo
 
 gemini = AIService()
 
+def obtener_codigo_banco(banco_str: str) -> str:
+    """Extrae o convierte el nombre del banco a su código de 4 dígitos para Pago Móvil en Venezuela"""
+    if not banco_str:
+        return ""
+    import re
+    match = re.search(r'\b\d{4}\b', banco_str)
+    if match:
+        return match.group()
+
+    banco_clean = banco_str.lower()
+    mapa_bancos = {
+        'mercantil': '0105',
+        'venezuela': '0102',
+        'bdv': '0102',
+        'banesco': '0134',
+        'provincial': '0108',
+        'bbva': '0108',
+        'bnc': '0191',
+        'credito': '0191',
+        'bancaribe': '0114',
+        'exterior': '0115',
+        'plaza': '0138',
+        'sofitasa': '0137',
+        '100%': '0156',
+        'del sur': '0157',
+        'tesoro': '0163',
+        'bancamiga': '0172',
+        'bancrecer': '0168',
+        'mi banco': '0169',
+        'activo': '0171',
+        'bicentenario': '0175',
+        'banfanb': '0177',
+    }
+    for clave, codigo in mapa_bancos.items():
+        if clave in banco_clean:
+            return codigo
+    return banco_str.strip()
+
+def limpiar_cedula(cedula_str: str) -> str:
+    """Limpia puntos, comas y espacios de la cédula o RIF"""
+    if not cedula_str:
+        return ""
+    import re
+    return re.sub(r'[\.,\s]', '', cedula_str.strip())
+
+def limpiar_telefono(telefono_str: str) -> str:
+    """Limpia guiones, espacios y paréntesis dejando únicamente los dígitos"""
+    if not telefono_str:
+        return ""
+    import re
+    return re.sub(r'[^\d]', '', telefono_str.strip())
+
 async def menu_recaudacion(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Muestra el submenú de Recaudación (Crear nueva o Ver reporte)"""
     query = update.callback_query
@@ -174,18 +226,24 @@ async def enviar_recaudacion(update: Update, context: ContextTypes.DEFAULT_TYPE)
         str(datos['banco']), str(datos['cedula']), str(datos['telefono']), str(datos['fecha_limite'])
     )
     
+    cod_banco = obtener_codigo_banco(str(datos['banco']))
+    ced_clean = limpiar_cedula(str(datos['cedula']))
+    tel_clean = limpiar_telefono(str(datos['telefono']))
+    monto_clean = f"{monto:.2f}"
+
     mensaje_anuncio = (
         f"💸 *NUEVA RECAUDACIÓN AUTORIZADA*\n\n"
         f"📝 *Concepto:* {datos['concepto']}\n"
-        f"💵 *Monto requerimiento:* `Bs. {monto:,.2f}`\n\n"
-        f"💳 *DATOS DE PAGO MÓVIL (DESTINO):*\n"
-        f"🏦 *Banco:* `{datos['banco']}`\n"
-        f"🪪 *Cédula:* `{datos['cedula']}`\n"
-        f"📱 *Teléfono:* `{datos['telefono']}`\n\n"
+        f"💵 *Monto requerimiento:* Bs. {monto:,.2f}\n\n"
+        f"💳 *DATOS PARA PAGO MÓVIL (DESTINO):*\n"
+        f"1️⃣ *Código de Banco ({datos['banco']}):*\n`{cod_banco}`\n"
+        f"2️⃣ *Cédula / RIF:*\n`{ced_clean}`\n"
+        f"3️⃣ *Teléfono:*\n`{tel_clean}`\n"
+        f"4️⃣ *Monto:*\n`{monto_clean}`\n\n"
         f"⏰ *Fecha Límite:* {datos['fecha_limite']}\n\n"
         f"📌 *INSTRUCCIONES DE REGISTRO DE PAGO:*\n"
         f"• 📲 *Pago Móvil:* Envía la captura del comprobante a este grupo (o usa el comando `/pago`).\n"
-        f"  La imagen debe mostrar: Fecha/hora, titular origen, referencia, banco destino (*DEBE ser {datos['banco']}*) y monto (`Bs. {monto:,.2f}`).\n"
+        f"  La captura debe mostrar: Fecha/hora, titular, referencia, banco destino (*DEBE ser {datos['banco']}*) y monto (Bs. {monto:,.2f}).\n"
         f"• 💵 *Pago en Efectivo:* Si le pagaste en efectivo al profesor, ejecuta el comando `/efectivo` en este grupo."
     )
     
@@ -600,17 +658,20 @@ async def consultar_recaudacion_comando(update: Update, context: ContextTypes.DE
     rec_id, profesor_id, g_id, concepto, monto, banco, cedula, telefono, fecha_limite, activa = rec_tuple[:10]
     monto = float(monto)
 
-    pagos = db.obtener_pagos_recaudacion(rec_id)
-    total_pagados = len(pagos)
+    cod_banco = obtener_codigo_banco(str(banco))
+    ced_clean = limpiar_cedula(str(cedula))
+    tel_clean = limpiar_telefono(str(telefono))
+    monto_clean = f"{monto:.2f}"
 
     mensaje_info = (
         f"💸 *RECAUDACIÓN ACTIVA DEL GRUPO*\n\n"
         f"📝 *Concepto:* {concepto}\n"
-        f"💵 *Monto requerimiento:* `Bs. {monto:,.2f}`\n\n"
-        f"💳 *DATOS DE PAGO MÓVIL (DESTINO):*\n"
-        f"🏦 *Banco:* `{banco}`\n"
-        f"🪪 *Cédula:* `{cedula}`\n"
-        f"📱 *Teléfono:* `{telefono}`\n\n"
+        f"💵 *Monto requerimiento:* Bs. {monto:,.2f}\n\n"
+        f"💳 *DATOS PARA PAGO MÓVIL (DESTINO):*\n"
+        f"1️⃣ *Código de Banco ({banco}):*\n`{cod_banco}`\n"
+        f"2️⃣ *Cédula / RIF:*\n`{ced_clean}`\n"
+        f"3️⃣ *Teléfono:*\n`{tel_clean}`\n"
+        f"4️⃣ *Monto:*\n`{monto_clean}`\n\n"
         f"⏰ *Fecha Límite:* {fecha_limite}\n"
         f"👥 *Pagos validados hasta ahora:* {total_pagados}\n\n"
         f"📌 *INSTRUCCIONES DE REGISTRO DE PAGO:*\n"
@@ -627,12 +688,12 @@ async def consultar_recaudacion_comando(update: Update, context: ContextTypes.DE
     )
 
 async def copiar_datos_pago_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Envía un bloque exclusivo de datos en formato código para copiar con un solo toque"""
+    """Envía los datos de pago formato código ordenados para Pago Móvil (Código Banco, RIF/Cédula, Teléfono, Monto)"""
     query = update.callback_query
     if not query:
         return
 
-    await query.answer("📋 Toca cualquier dato para copiarlo al portapapeles.")
+    await query.answer("📋 Toca cada valor monoespaciado para copiarlo a tu banco.")
 
     rec_id = int(query.data.replace("copiar_datos_pago_", ""))
     db = context.bot_data['db']
@@ -643,15 +704,22 @@ async def copiar_datos_pago_callback(update: Update, context: ContextTypes.DEFAU
         return
 
     concepto, monto, banco, cedula, telefono = row
-    monto_str = f"{float(monto):,.2f}"
+    cod_banco = obtener_codigo_banco(str(banco))
+    ced_clean = limpiar_cedula(str(cedula))
+    tel_clean = limpiar_telefono(str(telefono))
+    monto_clean = f"{float(monto):.2f}"
 
     msg_copiar = (
-        f"📋 *DATOS RÁPIDOS DE PAGO — {concepto}*\n"
-        f"*(Toca sobre cualquier dato para copiarlo)*\n\n"
-        f"🏦 *Banco:* `{banco}`\n"
-        f"🪪 *Cédula:* `{cedula}`\n"
-        f"📱 *Teléfono:* `{telefono}`\n"
-        f"💵 *Monto:* `{monto_str}`"
+        f"📋 *DATOS DE PAGO MÓVIL — {concepto}*\n"
+        f"*(Toca sobre cada casilla en orden para pegarlo en tu banco)*\n\n"
+        f"1️⃣ *Código de Banco:* ({banco})\n"
+        f"`{cod_banco}`\n\n"
+        f"2️⃣ *Cédula / RIF:*\n"
+        f"`{ced_clean}`\n\n"
+        f"3️⃣ *Teléfono:*\n"
+        f"`{tel_clean}`\n\n"
+        f"4️⃣ *Monto:*\n"
+        f"`{monto_clean}`"
     )
 
     try:
