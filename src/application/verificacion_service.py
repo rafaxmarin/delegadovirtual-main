@@ -131,3 +131,36 @@ def verificar_miembros(estudiantes_grupo, miembros_telegram):
             no_registrados.append(miembro)
     
     return verificados, no_registrados
+
+
+def es_nombre_coincidente(first_name: str, last_name: str, estudiantes_grupo) -> bool:
+    """Comprueba en tiempo real si un usuario (first_name, last_name) coincide con la lista de estudiantes.
+    
+    Aplica verificación dual (primer_nombre + primer_apellido o viceversa).
+    """
+    fn = _extraer_primer_palabra(first_name)
+    ln = _extraer_primer_palabra(last_name)
+    
+    if not fn and not ln:
+        return False
+
+    for est in estudiantes_grupo:
+        if isinstance(est, (list, tuple)):
+            apellidos = est[1] or ''
+            nombres = est[2] or ''
+        else:
+            apellidos = est.get('apellidos', '')
+            nombres = est.get('nombres', '')
+        
+        primer_apellido = _extraer_primer_palabra(apellidos)
+        primer_nombre = _extraer_primer_palabra(nombres)
+        
+        if primer_apellido and primer_nombre:
+            match_normal = (fn == primer_nombre and ln == primer_apellido)
+            match_invertido = (fn == primer_apellido and ln == primer_nombre)
+            
+            if match_normal or match_invertido:
+                return True
+    
+    return False
+

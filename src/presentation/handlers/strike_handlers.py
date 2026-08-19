@@ -3,6 +3,7 @@ from telegram.ext import ContextTypes
 from datetime import datetime, timedelta
 from src.infrastructure.ai.ai_service import AIService
 from src.presentation.auth_utils import verificar_pertenencia_grupo
+from src.application.verificacion_service import es_nombre_coincidente
 
 gemini = AIService()
 
@@ -139,6 +140,88 @@ async def monitorear_mensajes(update: Update, context: ContextTypes.DEFAULT_TYPE
         )
     except Exception:
         pass  # No interrumpir el flujo si falla el registro
+
+    # 🔴 VERIFICACIÓN EN TIEMPO REAL AL ESCRIBIR
+    try:
+        estudiantes = db.obtener_estudiantes_grupo(chat.id)
+        if estudiantes:
+            fn = user.first_name or ''
+            ln = user.last_name or ''
+            es_valido = es_nombre_coincidente(fn, ln, estudiantes)
+            nombre_display = f"{fn} {ln}".strip() or f"Usuario {user.id}"
+            user_tag = f"@{user.username}" if user.username else nombre_display
+
+            if es_valido:
+                # Si estaba en pendientes, marcar como verificado
+                db.resolver_pendiente(user.id, chat.id, 1)
+            else:
+                # Buscar si ya está en pendientes de este grupo
+                pendientes = db.obtener_pendientes_activos()
+                pendiente_actual = next((p for p in pendientes if p[0] == user.id and p[1] == chat.id), None)
+
+                if not pendiente_actual:
+                    # Primera vez detectado no verificado: darle 12 horas y notificar
+                    fecha_limite = datetime.now() + timedelta(hours=12)
+                    fecha_limite_str = fecha_limite.strftime('%d/%m/%Y %H:%M')
+                    db.agregar_pendiente_verificacion(user.id, chat.id, nombre_display, fecha_limite.isoformat())
+
+                    # Notificar al estudiante en el grupo
+                    await message.reply_text(
+                        f"⚠️ *AVISO DE VERIFICACIÓN — {user_tag}*\n\n"
+                        f"Tu nombre en Telegram (*{nombre_display}*) NO coincide con la lista oficial de estudiantes de este grupo.\n\n"
+                        f"📌 *Por favor modifica tu nombre y apellido en Telegram a:*\n"
+                        f"*PRIMER NOMBRE + PRIMER APELLIDO*\n\n"
+                        f"⏰ Tienes *12 horas* para realizar el cambio (Límite: *{fecha_limite_str}*). "
+                        f"De lo contrario, serás expulsado automáticamente del grupo.",
+                        parse_mode='Markdown'
+                    )
+
+                    # Enviar reporte inmediato al profesor
+                    if profesor_id:
+                        try:
+                            chat_title = chat.title or "el grupo"
+                            await context.bot.send_message(
+                                profesor_id,
+                                f"🚨 *REPORTE EN VIVO: MIEMBRO NO VERIFICADO*\n\n"
+                                f"📚 *Grupo:* {chat_title}\n"
+                                f"👤 *Usuario:* {nombre_display} ({user_tag})\n"
+                                f"🆔 *ID:* `{user.id}`\n\n"
+                                f"⚠️ Acaba de escribir en el grupo pero NO aparece en la lista oficial de estudiantes.\n"
+                                f"⏰ Notificado en el grupo con ultimátum de 12 horas (Límite: {fecha_limite_str}).",
+                                parse_mode='Markdown'
+                            )
+                        except Exception as e:
+                            print(f"⚠️ Error al notificar al profesor: {e}")
+
+                else:
+                    # Ya estaba en pendientes: verificar si transcurrieron las 12 horas
+                    fecha_limite_str = pendiente_actual[3]
+                    try:
+                        fecha_limite = datetime.fromisoformat(fecha_limite_str)
+                        if datetime.now() >= fecha_limite:
+                            # 12 horas cumplidas sin cambiar nombre -> expulsar
+                            await context.bot.ban_chat_member(chat.id, user.id)
+                            await context.bot.unban_chat_member(chat.id, user.id, only_if_banned=True)
+                            db.resolver_pendiente(user.id, chat.id, 2)
+
+                            await message.reply_text(
+                                f"🚫 *{nombre_display}* ha sido expulsado del grupo por no "
+                                f"actualizar su nombre según la lista oficial dentro del plazo de 12 horas.",
+                                parse_mode='Markdown'
+                            )
+                            if profesor_id:
+                                await context.bot.send_message(
+                                    profesor_id,
+                                    f"🚫 *REPORTE DE EXPULSIÓN AUTOMÁTICA*\n\n"
+                                    f"📚 *Grupo:* {chat.title}\n"
+                                    f"👤 *Usuario:* {nombre_display} ({user_tag})\n"
+                                    f"⏰ Expulsado automáticamente tras cumplir 12 horas sin verificar su nombre.",
+                                    parse_mode='Markdown'
+                                )
+                    except Exception as e:
+                        print(f"⚠️ Error al evaluar ultimátum o expulsar usuario: {e}")
+    except Exception as e:
+        print(f"⚠️ Error en flujo de verificación en tiempo real: {e}")
 
     contenido = ""
     if message.text:
