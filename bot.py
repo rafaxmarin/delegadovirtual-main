@@ -1,6 +1,6 @@
 import os
 from telegram import Update
-from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ChatMemberHandler, filters
+from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ChatMemberHandler, ChatJoinRequestHandler, filters
 from src.config import Config
 from src.infrastructure.database.factory import get_repository
 
@@ -28,6 +28,7 @@ from src.presentation.handlers.verificacion_handlers import (
     verificar_miembros_menu, seleccionar_grupo_verificacion,
     notificar_grupo_verificacion, verificar_pendientes_job
 )
+from src.presentation.handlers.join_request_handlers import procesar_solicitud_ingreso
 from src.presentation.handlers.ai_config_handlers import (
     gemini_api_key_comando, gemini_model_comando,
     deepseek_api_key_comando, deepseek_model_comando,
@@ -150,6 +151,9 @@ def main():
     # CALLBACKS DE VERIFICACIÓN DE MIEMBROS
     application.add_handler(CallbackQueryHandler(seleccionar_grupo_verificacion, pattern='^cargar_verificacion_'))
     application.add_handler(CallbackQueryHandler(notificar_grupo_verificacion, pattern='^notificar_verificacion_'))
+
+    # SOLICITUDES DE INGRESO A GRUPOS (ChatJoinRequest)
+    application.add_handler(ChatJoinRequestHandler(procesar_solicitud_ingreso))
 
     # MENSAJES EN GRUPOS
     application.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, detectar_agregacion_grupo))

@@ -71,16 +71,17 @@ async def invitar_alumno_grupo(update: Update, context: ContextTypes.DEFAULT_TYP
         chat = await context.bot.get_chat(chat_id)
         invite_link = await context.bot.create_chat_invite_link(
             chat_id,
-            expire_date=None,
-            member_limit=1
+            creates_join_request=True,
+            name="Enlace Verificado Estudiantes"
         )
         
         mensaje_invitacion = (
             f"📚 *INVITACIÓN ACADÉMICA*\n\n"
             f"Has sido invitado a unirte al grupo:\n"
             f"*{chat.title}*\n\n"
-            f"Este es un grupo académico de la Universidad de Oriente, "
-            f"Núcleo Monagas.\n\n"
+            f"⚠️ *REQUISITO PARA PODER INGRESAR:*\n"
+            f"Debes tener configurado tu perfil de Telegram con tu:\n"
+            f"👉 *PRIMER NOMBRE + PRIMER APELLIDO*\n\n"
             f"🔗 *Enlace de invitación:* {invite_link.invite_link}\n\n"
             f"¡Te esperamos!"
         )
