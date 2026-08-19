@@ -378,20 +378,6 @@ async def verificar_pendientes_job(context: ContextTypes.DEFAULT_TYPE):
                 except Exception:
                     pass
 
-                # Notificar al profesor
-                profesor_id = db.obtener_profesor_de_grupo(p_chat_id)
-                if profesor_id:
-                    try:
-                        await context.bot.send_message(
-                            profesor_id,
-                            f"🚫 *Expulsión automática*\n\n"
-                            f"*{nombre_display}* fue expulsado de *{nombre_grupo}* "
-                            f"por no actualizar su nombre en las 12 horas.",
-                            parse_mode='Markdown'
-                        )
-                    except Exception:
-                        pass
-
                 print(f"🚫 Kick ejecutado: {nombre_display} de grupo {p_chat_id}")
 
             except TelegramError as e:

@@ -176,23 +176,6 @@ async def monitorear_mensajes(update: Update, context: ContextTypes.DEFAULT_TYPE
                         parse_mode='Markdown'
                     )
 
-                    # Enviar reporte inmediato al profesor
-                    if profesor_id:
-                        try:
-                            chat_title = chat.title or "el grupo"
-                            await context.bot.send_message(
-                                profesor_id,
-                                f"🚨 *REPORTE EN VIVO: MIEMBRO NO VERIFICADO*\n\n"
-                                f"📚 *Grupo:* {chat_title}\n"
-                                f"👤 *Usuario:* {nombre_display} ({user_tag})\n"
-                                f"🆔 *ID:* `{user.id}`\n\n"
-                                f"⚠️ Acaba de escribir en el grupo pero NO aparece en la lista oficial de estudiantes.\n"
-                                f"⏰ Notificado en el grupo con ultimátum de 12 horas (Límite: {fecha_limite_str}).",
-                                parse_mode='Markdown'
-                            )
-                        except Exception as e:
-                            print(f"⚠️ Error al notificar al profesor: {e}")
-
                 else:
                     # Ya estaba en pendientes: verificar si transcurrieron las 12 horas
                     fecha_limite_str = pendiente_actual[3]
@@ -209,15 +192,6 @@ async def monitorear_mensajes(update: Update, context: ContextTypes.DEFAULT_TYPE
                                 f"actualizar su nombre según la lista oficial dentro del plazo de 12 horas.",
                                 parse_mode='Markdown'
                             )
-                            if profesor_id:
-                                await context.bot.send_message(
-                                    profesor_id,
-                                    f"🚫 *REPORTE DE EXPULSIÓN AUTOMÁTICA*\n\n"
-                                    f"📚 *Grupo:* {chat.title}\n"
-                                    f"👤 *Usuario:* {nombre_display} ({user_tag})\n"
-                                    f"⏰ Expulsado automáticamente tras cumplir 12 horas sin verificar su nombre.",
-                                    parse_mode='Markdown'
-                                )
                     except Exception as e:
                         print(f"⚠️ Error al evaluar ultimátum o expulsar usuario: {e}")
     except Exception as e:
