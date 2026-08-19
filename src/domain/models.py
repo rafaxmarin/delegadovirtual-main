@@ -1,6 +1,35 @@
 from dataclasses import dataclass, field
-from typing import Optional, List
+from typing import Optional
 from datetime import datetime
+
+@dataclass
+class EstudianteGrupo:
+    """Estudiante cargado desde el Excel del profesor, asociado a un grupo"""
+    chat_id: int
+    cedula: str
+    apellidos: str
+    nombres: str
+    correo: str
+
+@dataclass
+class MiembroTelegram:
+    """Miembro detectado en un grupo de Telegram (registro pasivo)"""
+    user_id: int
+    chat_id: int
+    first_name: str
+    last_name: str
+    username: Optional[str] = None
+    fecha_visto: Optional[str] = field(default_factory=lambda: datetime.now().isoformat())
+
+@dataclass
+class PendienteVerificacion:
+    """Miembro que no pasó la verificación y tiene plazo para cambiar su nombre"""
+    user_id: int
+    chat_id: int
+    nombre_telegram: str
+    fecha_limite: str
+    notificado: bool = True
+    resuelto: int = 0  # 0=pendiente, 1=verificado, 2=expulsado
 
 @dataclass
 class Profesor:

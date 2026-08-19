@@ -1,6 +1,6 @@
 import os
 from telegram import Update
-from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters
+from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ChatMemberHandler, filters
 from src.config import Config
 from src.infrastructure.database.factory import get_repository
 
@@ -24,6 +24,10 @@ from src.presentation.handlers.material_handlers import compartir_material, conf
 from src.presentation.handlers.anuncio_handlers import emitir_anuncio, confirmar_anuncio, enviar_anuncio_grupo
 from src.presentation.handlers.reglamento_handlers import fijar_reglamento, confirmar_reglamento, fijar_reglamento_grupo
 from src.presentation.handlers.natural_handlers import procesar_mensaje_natural
+from src.presentation.handlers.verificacion_handlers import (
+    verificar_miembros_menu, seleccionar_grupo_verificacion,
+    notificar_grupo_verificacion, verificar_pendientes_job
+)
 from src.presentation.handlers.ai_config_handlers import (
     gemini_api_key_comando, gemini_model_comando,
     deepseek_api_key_comando, deepseek_model_comando,
@@ -94,6 +98,7 @@ def main():
     application.add_handler(CallbackQueryHandler(fijar_reglamento, pattern='^menu_reglamento$'))
     application.add_handler(CallbackQueryHandler(agregar_alumno, pattern='^menu_agregar$'))
     application.add_handler(CallbackQueryHandler(eliminar_alumno, pattern='^menu_eliminar$'))
+    application.add_handler(CallbackQueryHandler(verificar_miembros_menu, pattern='^menu_verificar_miembros$'))
     application.add_handler(CallbackQueryHandler(volver_menu, pattern='^volver_menu$'))
     application.add_handler(CallbackQueryHandler(cerrar_menu, pattern='^menu_cerrar$'))
 
@@ -142,10 +147,15 @@ def main():
     application.add_handler(CallbackQueryHandler(listar_estudiantes_grupo, pattern='^listar_estudiantes_'))
     application.add_handler(CallbackQueryHandler(confirmar_eliminar_alumno, pattern='^confirmar_eliminar_alumno_'))
 
+    # CALLBACKS DE VERIFICACIÓN DE MIEMBROS
+    application.add_handler(CallbackQueryHandler(seleccionar_grupo_verificacion, pattern='^cargar_verificacion_'))
+    application.add_handler(CallbackQueryHandler(notificar_grupo_verificacion, pattern='^notificar_verificacion_'))
+
     # MENSAJES EN GRUPOS
     application.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, detectar_agregacion_grupo))
+    application.add_handler(ChatMemberHandler(detectar_agregacion_grupo, ChatMemberHandler.MY_CHAT_MEMBER))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.ChatType.GROUPS & filters.Regex(r'(?i)@'), detectar_solicitud_estudiante))
-    application.add_handler(MessageHandler(filters.PHOTO | filters.Document.ALL, validar_comprobante))
+    application.add_handler(MessageHandler((filters.PHOTO | filters.Document.ALL) & filters.ChatType.GROUPS, validar_comprobante))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.ChatType.GROUPS, monitorear_mensajes))
 
     # MENSAJES PRIVADOS (Atiende texto, documentos, fotos o cualquier contenido según estado)
@@ -157,6 +167,7 @@ def main():
     # Jobs periódicos (Revisión de fechas límite cada 5 min)
     if application.job_queue:
         application.job_queue.run_repeating(verificar_fechas_limite_job, interval=300, first=15)
+        application.job_queue.run_repeating(verificar_pendientes_job, interval=1800, first=60)  # Cada 30 min
 
     print("🚀 Delegado Virtual iniciado exitosamente!")
     application.run_polling(allowed_updates=Update.ALL_TYPES)

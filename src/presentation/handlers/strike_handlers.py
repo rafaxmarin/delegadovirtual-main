@@ -129,7 +129,17 @@ async def monitorear_mensajes(update: Update, context: ContextTypes.DEFAULT_TYPE
     profesor_id = db.obtener_profesor_de_grupo(chat.id)
     if user.id == profesor_id or db.es_profesor_verificado(user.id):
         return
-    
+
+    # Registro pasivo de miembros del grupo para verificación
+    try:
+        db.registrar_miembro_telegram(
+            chat.id, user.id,
+            user.first_name or '', user.last_name or '',
+            user.username or ''
+        )
+    except Exception:
+        pass  # No interrumpir el flujo si falla el registro
+
     contenido = ""
     if message.text:
         contenido = message.text

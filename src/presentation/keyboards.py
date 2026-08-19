@@ -23,6 +23,9 @@ def get_menu_keyboard() -> InlineKeyboardMarkup:
             InlineKeyboardButton("➖ Eliminar alumno", callback_data="menu_eliminar")
         ],
         [
+            InlineKeyboardButton("✅ Verificar miembros", callback_data="menu_verificar_miembros")
+        ],
+        [
             InlineKeyboardButton("❌ Cerrar panel", callback_data="menu_cerrar")
         ]
     ]

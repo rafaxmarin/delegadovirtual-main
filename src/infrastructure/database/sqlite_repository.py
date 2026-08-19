@@ -108,6 +108,45 @@ class SQLiteRepository:
                 valor TEXT
             )
         ''')
+
+        # Tabla de estudiantes cargados desde Excel (por grupo)
+        self.cursor.execute('''
+            CREATE TABLE IF NOT EXISTS estudiantes_grupo (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                chat_id INTEGER,
+                cedula TEXT,
+                apellidos TEXT,
+                nombres TEXT,
+                correo TEXT,
+                FOREIGN KEY (chat_id) REFERENCES grupos(chat_id)
+            )
+        ''')
+
+        # Tabla de miembros de Telegram detectados (registro pasivo)
+        self.cursor.execute('''
+            CREATE TABLE IF NOT EXISTS miembros_telegram (
+                user_id INTEGER,
+                chat_id INTEGER,
+                first_name TEXT,
+                last_name TEXT,
+                username TEXT,
+                fecha_visto TEXT,
+                PRIMARY KEY (user_id, chat_id)
+            )
+        ''')
+
+        # Tabla de pendientes de verificación (ultimátum 12h)
+        self.cursor.execute('''
+            CREATE TABLE IF NOT EXISTS pendientes_verificacion (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER,
+                chat_id INTEGER,
+                nombre_telegram TEXT,
+                fecha_limite TEXT,
+                notificado INTEGER DEFAULT 1,
+                resuelto INTEGER DEFAULT 0
+            )
+        ''')
         
         self.conn.commit()
         self._migrar_esquema()
@@ -365,6 +404,72 @@ class SQLiteRepository:
         res = self.cursor.fetchone()
         return res[0] if res else None
     
+    # --- ESTUDIANTES DE GRUPO (desde Excel) ---
+    def guardar_estudiante_grupo(self, chat_id: int, cedula: str, apellidos: str, nombres: str, correo: str):
+        self.cursor.execute(
+            'INSERT INTO estudiantes_grupo (chat_id, cedula, apellidos, nombres, correo) VALUES (?, ?, ?, ?, ?)',
+            (chat_id, cedula, apellidos, nombres, correo)
+        )
+        self.conn.commit()
+
+    def obtener_estudiantes_grupo(self, chat_id: int) -> List[Tuple]:
+        self.cursor.execute(
+            'SELECT cedula, apellidos, nombres, correo FROM estudiantes_grupo WHERE chat_id = ?',
+            (chat_id,)
+        )
+        return self.cursor.fetchall()
+
+    def eliminar_estudiantes_grupo(self, chat_id: int):
+        self.cursor.execute('DELETE FROM estudiantes_grupo WHERE chat_id = ?', (chat_id,))
+        self.conn.commit()
+
+    # --- MIEMBROS DE TELEGRAM (registro pasivo) ---
+    def registrar_miembro_telegram(self, chat_id: int, user_id: int, first_name: str, last_name: str, username: str):
+        self.cursor.execute('''
+            INSERT INTO miembros_telegram (user_id, chat_id, first_name, last_name, username, fecha_visto)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(user_id, chat_id) DO UPDATE SET
+                first_name = excluded.first_name,
+                last_name = excluded.last_name,
+                username = excluded.username,
+                fecha_visto = excluded.fecha_visto
+        ''', (user_id, chat_id, first_name, last_name, username, datetime.now().isoformat()))
+        self.conn.commit()
+
+    def obtener_miembros_telegram(self, chat_id: int) -> List[Tuple]:
+        self.cursor.execute(
+            'SELECT user_id, first_name, last_name, username FROM miembros_telegram WHERE chat_id = ?',
+            (chat_id,)
+        )
+        return self.cursor.fetchall()
+
+    # --- PENDIENTES DE VERIFICACIÓN ---
+    def agregar_pendiente_verificacion(self, user_id: int, chat_id: int, nombre_telegram: str, fecha_limite: str):
+        # Eliminar pendiente anterior si existe para este usuario/grupo
+        self.cursor.execute(
+            'DELETE FROM pendientes_verificacion WHERE user_id = ? AND chat_id = ?',
+            (user_id, chat_id)
+        )
+        self.cursor.execute(
+            'INSERT INTO pendientes_verificacion (user_id, chat_id, nombre_telegram, fecha_limite, notificado, resuelto) VALUES (?, ?, ?, ?, 1, 0)',
+            (user_id, chat_id, nombre_telegram, fecha_limite)
+        )
+        self.conn.commit()
+
+    def obtener_pendientes_activos(self) -> List[Tuple]:
+        self.cursor.execute(
+            'SELECT user_id, chat_id, nombre_telegram, fecha_limite, notificado, resuelto '
+            'FROM pendientes_verificacion WHERE resuelto = 0'
+        )
+        return self.cursor.fetchall()
+
+    def resolver_pendiente(self, user_id: int, chat_id: int, estado: int):
+        self.cursor.execute(
+            'UPDATE pendientes_verificacion SET resuelto = ? WHERE user_id = ? AND chat_id = ?',
+            (estado, user_id, chat_id)
+        )
+        self.conn.commit()
+
     def close(self):
         self.conn.close()
 

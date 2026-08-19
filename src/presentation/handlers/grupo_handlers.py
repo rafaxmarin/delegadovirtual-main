@@ -81,34 +81,41 @@ async def detalle_grupo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 async def detectar_agregacion_grupo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Detecta cuando el bot es agregado a un grupo y notifica al profesor (CORREGIDO AUTO-EXPULSIÓN)"""
+    """Detecta cuando el bot es agregado a un grupo y notifica al profesor (vía mensaje o my_chat_member)"""
     chat = update.effective_chat
     user = update.effective_user
     db = context.bot_data['db']
     
-    if chat.type not in ['group', 'supergroup']:
+    if not chat or chat.type not in ['group', 'supergroup']:
         return
     
-    if not update.message:
-        return
-    
-    # 🔴 CORRECCIÓN CLAVE: Verificar si el nuevo miembro agregado es realmente EL BOT
     bot_id = context.bot.id
-    nuevos_miembros = update.message.new_chat_members or []
-    bot_fue_agregado = any(member.id == bot_id for member in nuevos_miembros)
+    bot_fue_agregado = False
+
+    if update.message and update.message.new_chat_members:
+        bot_fue_agregado = any(member.id == bot_id for member in update.message.new_chat_members)
+    elif update.my_chat_member:
+        new_status = update.my_chat_member.new_chat_member.status
+        old_status = update.my_chat_member.old_chat_member.status
+        if new_status in ['member', 'administrator'] and old_status in ['left', 'kicked', 'restricted']:
+            bot_fue_agregado = True
+            user = update.my_chat_member.from_user
     
-    # Si ingresó un estudiante común, NO hacer nada
-    if not bot_fue_agregado:
+    # Si no fue el bot quien ingresó, salir
+    if not bot_fue_agregado or not user:
         return
     
     # Si el bot fue agregado por alguien que NO es profesor verificado, salir del grupo
     if not db.es_profesor_verificado(user.id):
-        await context.bot.send_message(
-            chat.id,
-            "❌ Este bot es exclusivo para profesores de la UDO Monagas. "
-            "Saliendo del grupo..."
-        )
-        await context.bot.leave_chat(chat.id)
+        try:
+            await context.bot.send_message(
+                chat.id,
+                "❌ Este bot es exclusivo para profesores de la UDO Monagas. "
+                "Saliendo del grupo..."
+            )
+            await context.bot.leave_chat(chat.id)
+        except Exception:
+            pass
         return
     
     # Si fue agregado por un profesor verificado, enviar confirmación en privado
@@ -120,15 +127,18 @@ async def detectar_agregacion_grupo(update: Update, context: ContextTypes.DEFAUL
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
-    await context.bot.send_message(
-        user.id,
-        f"📢 El Delegado Virtual fue agregado a un nuevo grupo:\n\n"
-        f"*Nombre:* {chat.title}\n"
-        f"*ID:* {chat.id}\n\n"
-        "¿Qué deseas hacer?",
-        parse_mode='Markdown',
-        reply_markup=reply_markup
-    )
+    try:
+        await context.bot.send_message(
+            user.id,
+            f"📢 El Delegado Virtual fue agregado a un nuevo grupo:\n\n"
+            f"*Nombre:* {chat.title}\n"
+            f"*ID:* {chat.id}\n\n"
+            "¿Qué deseas hacer?",
+            parse_mode='Markdown',
+            reply_markup=reply_markup
+        )
+    except Exception as e:
+        print(f"⚠️ No se pudo enviar mensaje privado al profesor {user.id}: {e}")
 
 async def manejar_respuesta_grupo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Maneja la aceptación o rechazo de un grupo"""

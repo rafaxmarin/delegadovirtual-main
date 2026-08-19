@@ -9,6 +9,7 @@ from src.presentation.handlers.asesoria_handlers import recibir_respuesta_asesor
 from src.presentation.handlers.material_handlers import recibir_material
 from src.presentation.handlers.anuncio_handlers import recibir_anuncio
 from src.presentation.handlers.reglamento_handlers import recibir_reglamento
+from src.presentation.handlers.verificacion_handlers import recibir_excel_verificacion
 
 gemini = AIService()
 
@@ -34,6 +35,11 @@ async def procesar_mensaje_natural(update: Update, context: ContextTypes.DEFAULT
         await message.reply_text("🔒 Usa /start para verificar tu acceso como profesor.")
         return
     
+    # Flujo de verificación de miembros (recibe Excel como documento)
+    if context.user_data.get('esperando_excel_verificacion') and message.document:
+        await recibir_excel_verificacion(update, context)
+        return
+
     texto = message.text.strip() if message.text else ""
     if texto.lower() in ['cancelar', 'cancel', 'salir']:
         context.user_data.clear()

@@ -411,5 +411,100 @@ class FirebaseRepository:
             return doc.to_dict().get('valor')
         return None
 
+    # --- ESTUDIANTES DE GRUPO (desde Excel) ---
+    def guardar_estudiante_grupo(self, chat_id: int, cedula: str, apellidos: str, nombres: str, correo: str):
+        doc_id = f"{self._to_int(chat_id)}_{cedula}"
+        self.db.collection('estudiantes_grupo').document(doc_id).set({
+            'chat_id': self._to_int(chat_id),
+            'cedula': cedula or '',
+            'apellidos': apellidos or '',
+            'nombres': nombres or '',
+            'correo': correo or ''
+        })
+
+    def obtener_estudiantes_grupo(self, chat_id: int) -> List[Tuple]:
+        target_cid = self._to_int(chat_id)
+        docs = self.db.collection('estudiantes_grupo').stream()
+        res = []
+        for doc in docs:
+            d = doc.to_dict()
+            if self._to_int(d.get('chat_id')) == target_cid:
+                res.append((
+                    d.get('cedula', ''),
+                    d.get('apellidos', ''),
+                    d.get('nombres', ''),
+                    d.get('correo', '')
+                ))
+        return res
+
+    def eliminar_estudiantes_grupo(self, chat_id: int):
+        target_cid = self._to_int(chat_id)
+        docs = self.db.collection('estudiantes_grupo').stream()
+        for doc in docs:
+            d = doc.to_dict()
+            if self._to_int(d.get('chat_id')) == target_cid:
+                doc.reference.delete()
+
+    # --- MIEMBROS DE TELEGRAM (registro pasivo) ---
+    def registrar_miembro_telegram(self, chat_id: int, user_id: int, first_name: str, last_name: str, username: str):
+        doc_id = f"{self._to_int(chat_id)}_{self._to_int(user_id)}"
+        self.db.collection('miembros_telegram').document(doc_id).set({
+            'user_id': self._to_int(user_id),
+            'chat_id': self._to_int(chat_id),
+            'first_name': first_name or '',
+            'last_name': last_name or '',
+            'username': username or '',
+            'fecha_visto': datetime.now().isoformat()
+        })
+
+    def obtener_miembros_telegram(self, chat_id: int) -> List[Tuple]:
+        target_cid = self._to_int(chat_id)
+        docs = self.db.collection('miembros_telegram').stream()
+        res = []
+        for doc in docs:
+            d = doc.to_dict()
+            if self._to_int(d.get('chat_id')) == target_cid:
+                res.append((
+                    self._to_int(d.get('user_id')),
+                    d.get('first_name', ''),
+                    d.get('last_name', ''),
+                    d.get('username', '')
+                ))
+        return res
+
+    # --- PENDIENTES DE VERIFICACIÓN ---
+    def agregar_pendiente_verificacion(self, user_id: int, chat_id: int, nombre_telegram: str, fecha_limite: str):
+        doc_id = f"{self._to_int(chat_id)}_{self._to_int(user_id)}"
+        self.db.collection('pendientes_verificacion').document(doc_id).set({
+            'user_id': self._to_int(user_id),
+            'chat_id': self._to_int(chat_id),
+            'nombre_telegram': nombre_telegram or '',
+            'fecha_limite': fecha_limite or '',
+            'notificado': 1,
+            'resuelto': 0
+        })
+
+    def obtener_pendientes_activos(self) -> List[Tuple]:
+        docs = self.db.collection('pendientes_verificacion').stream()
+        res = []
+        for doc in docs:
+            d = doc.to_dict()
+            if d.get('resuelto') in (0, False):
+                res.append((
+                    self._to_int(d.get('user_id')),
+                    self._to_int(d.get('chat_id')),
+                    d.get('nombre_telegram', ''),
+                    d.get('fecha_limite', ''),
+                    self._to_int(d.get('notificado')),
+                    self._to_int(d.get('resuelto'))
+                ))
+        return res
+
+    def resolver_pendiente(self, user_id: int, chat_id: int, estado: int):
+        doc_id = f"{self._to_int(chat_id)}_{self._to_int(user_id)}"
+        self.db.collection('pendientes_verificacion').document(doc_id).set(
+            {'resuelto': estado}, merge=True
+        )
+
     def close(self):
         pass
