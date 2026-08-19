@@ -35,20 +35,27 @@ def leer_excel_estudiantes(file_path: str) -> List[Dict[str, str]]:
     if not rows:
         raise ValueError("El archivo Excel está vacío.")
     
-    # Map header names to column indices
+    # Map normalized header names to column indices
     header_row = rows[0]
     col_map = {}
     for i, h in enumerate(header_row):
         if h and str(h).strip():
-            col_map[str(h).strip()] = i
+            key_norm = normalizar_texto(str(h))
+            col_map[key_norm] = i
     
-    # Validate required columns
-    columnas_requeridas = ['Cédula', 'Apellidos', 'Nombres', 'Correo']
-    faltantes = [c for c in columnas_requeridas if c not in col_map]
+    # Validate required columns (normalized)
+    columnas_requeridas = {
+        'cedula': 'CÉDULA',
+        'apellidos': 'APELLIDOS',
+        'nombres': 'NOMBRES',
+        'correo': 'CORREO'
+    }
+    
+    faltantes = [nombre_orig for key_norm, nombre_orig in columnas_requeridas.items() if key_norm not in col_map]
     if faltantes:
         raise ValueError(
             f"Columna(s) no encontrada(s): {', '.join(faltantes)}\n"
-            f"Columnas encontradas: {', '.join(col_map.keys())}"
+            f"Columnas encontradas en Excel: {', '.join(str(h) for h in header_row if h)}"
         )
     
     estudiantes = []
@@ -56,10 +63,10 @@ def leer_excel_estudiantes(file_path: str) -> List[Dict[str, str]]:
         if not row or all(cell is None for cell in row):
             continue
         
-        cedula = str(row[col_map['Cédula']] or '').strip()
-        apellidos = str(row[col_map['Apellidos']] or '').strip()
-        nombres = str(row[col_map['Nombres']] or '').strip()
-        correo = str(row[col_map['Correo']] or '').strip()
+        cedula = str(row[col_map['cedula']] or '').strip() if col_map['cedula'] < len(row) else ''
+        apellidos = str(row[col_map['apellidos']] or '').strip() if col_map['apellidos'] < len(row) else ''
+        nombres = str(row[col_map['nombres']] or '').strip() if col_map['nombres'] < len(row) else ''
+        correo = str(row[col_map['correo']] or '').strip() if col_map['correo'] < len(row) else ''
         
         # Skip empty rows
         if not cedula and not apellidos and not nombres:

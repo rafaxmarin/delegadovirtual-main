@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import time
 from datetime import datetime
 from typing import List, Tuple, Optional
@@ -413,14 +414,24 @@ class FirebaseRepository:
 
     # --- ESTUDIANTES DE GRUPO (desde Excel) ---
     def guardar_estudiante_grupo(self, chat_id: int, cedula: str, apellidos: str, nombres: str, correo: str):
-        doc_id = f"{self._to_int(chat_id)}_{cedula}"
-        self.db.collection('estudiantes_grupo').document(doc_id).set({
-            'chat_id': self._to_int(chat_id),
-            'cedula': cedula or '',
-            'apellidos': apellidos or '',
-            'nombres': nombres or '',
-            'correo': correo or ''
-        })
+        cid = self._to_int(chat_id)
+        ced_clean = str(cedula or '').strip()
+        doc_id = f"{cid}_{ced_clean}"
+        doc_id_clean = re.sub(r'[^a-zA-Z0-9_-]', '_', doc_id) if ced_clean else None
+
+        data = {
+            'chat_id': cid,
+            'cedula': ced_clean,
+            'apellidos': str(apellidos or '').strip(),
+            'nombres': str(nombres or '').strip(),
+            'correo': str(correo or '').strip(),
+            'fecha_carga': datetime.now().isoformat()
+        }
+
+        if doc_id_clean:
+            self.db.collection('estudiantes_grupo').document(doc_id_clean).set(data)
+        else:
+            self.db.collection('estudiantes_grupo').document().set(data)
 
     def obtener_estudiantes_grupo(self, chat_id: int) -> List[Tuple]:
         target_cid = self._to_int(chat_id)
@@ -447,10 +458,12 @@ class FirebaseRepository:
 
     # --- MIEMBROS DE TELEGRAM (registro pasivo) ---
     def registrar_miembro_telegram(self, chat_id: int, user_id: int, first_name: str, last_name: str, username: str):
-        doc_id = f"{self._to_int(chat_id)}_{self._to_int(user_id)}"
+        cid = self._to_int(chat_id)
+        uid = self._to_int(user_id)
+        doc_id = re.sub(r'[^a-zA-Z0-9_-]', '_', f"{cid}_{uid}")
         self.db.collection('miembros_telegram').document(doc_id).set({
-            'user_id': self._to_int(user_id),
-            'chat_id': self._to_int(chat_id),
+            'user_id': uid,
+            'chat_id': cid,
             'first_name': first_name or '',
             'last_name': last_name or '',
             'username': username or '',
@@ -474,10 +487,12 @@ class FirebaseRepository:
 
     # --- PENDIENTES DE VERIFICACIÓN ---
     def agregar_pendiente_verificacion(self, user_id: int, chat_id: int, nombre_telegram: str, fecha_limite: str):
-        doc_id = f"{self._to_int(chat_id)}_{self._to_int(user_id)}"
+        cid = self._to_int(chat_id)
+        uid = self._to_int(user_id)
+        doc_id = re.sub(r'[^a-zA-Z0-9_-]', '_', f"{cid}_{uid}")
         self.db.collection('pendientes_verificacion').document(doc_id).set({
-            'user_id': self._to_int(user_id),
-            'chat_id': self._to_int(chat_id),
+            'user_id': uid,
+            'chat_id': cid,
             'nombre_telegram': nombre_telegram or '',
             'fecha_limite': fecha_limite or '',
             'notificado': 1,
@@ -501,7 +516,9 @@ class FirebaseRepository:
         return res
 
     def resolver_pendiente(self, user_id: int, chat_id: int, estado: int):
-        doc_id = f"{self._to_int(chat_id)}_{self._to_int(user_id)}"
+        cid = self._to_int(chat_id)
+        uid = self._to_int(user_id)
+        doc_id = re.sub(r'[^a-zA-Z0-9_-]', '_', f"{cid}_{uid}")
         self.db.collection('pendientes_verificacion').document(doc_id).set(
             {'resuelto': estado}, merge=True
         )
