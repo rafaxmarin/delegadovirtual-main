@@ -1,9 +1,6 @@
 import unicodedata
 from typing import List, Dict
 
-import openpyxl
-
-
 def normalizar_texto(texto: str) -> str:
     """Normaliza texto: minúsculas, sin acentos, sin caracteres especiales"""
     if not texto:
@@ -24,6 +21,11 @@ def leer_excel_estudiantes(file_path: str) -> List[Dict[str, str]]:
     
     Columnas esperadas: Cédula, Apellidos, Nombres, Correo
     """
+    try:
+        import openpyxl
+    except ImportError:
+        raise ValueError("La librería 'openpyxl' no está instalada en el servidor. Instálala ejecutando: pip install openpyxl")
+
     wb = openpyxl.load_workbook(file_path, read_only=True)
     ws = wb.active
     

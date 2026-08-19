@@ -16,3 +16,6 @@ Pillow>=10.0.0
 
 # Base de datos Firebase
 firebase-admin>=6.0.0
+
+# Lectura de archivos Excel
+openpyxl>=3.1.0
