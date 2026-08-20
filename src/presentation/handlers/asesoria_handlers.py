@@ -229,6 +229,12 @@ async def enviar_pregunta_asesoria(update: Update, context: ContextTypes.DEFAULT
         if len(partes) > 1:
             pregunta = partes[1].strip()
 
+    # Si la pregunta contiene la mención al bot, removerla
+    bot_username = context.bot.username
+    if bot_username and f"@{bot_username}".lower() in pregunta.lower():
+        import re
+        pregunta = re.sub(re.escape(f"@{bot_username}"), "", pregunta, flags=re.IGNORECASE).strip()
+
     if not pregunta:
         await message.reply_text(
             "❓ *¿Cómo hacer una pregunta al profesor?*\n\n"
@@ -238,6 +244,18 @@ async def enviar_pregunta_asesoria(update: Update, context: ContextTypes.DEFAULT
             parse_mode='Markdown'
         )
         return
+
+    # Verificar si ya existe una asesoría pendiente idéntica
+    profesor_id = db.obtener_profesor_de_grupo(chat.id)
+    if profesor_id:
+        pendientes = db.obtener_asesorias_pendientes(profesor_id)
+        pregunta_duplicada = any(
+            s[4] == chat.id and s[2] == user.full_name and s[3].strip().lower() == pregunta.strip().lower()
+            for s in pendientes if len(s) > 4
+        )
+        if pregunta_duplicada:
+            await message.reply_text("ℹ️ Tu pregunta ya fue enviada al profesor y está pendiente de respuesta.")
+            return
 
     contador = db.obtener_contador_asesorias(chat.id)
     if contador >= 10:
@@ -253,7 +271,6 @@ async def enviar_pregunta_asesoria(update: Update, context: ContextTypes.DEFAULT
         f"Solicitudes hoy: {contador + 1}/10"
     )
 
-    profesor_id = db.obtener_profesor_de_grupo(chat.id)
     if profesor_id:
         await notificar_profesor_nueva_asesoria(
             context=context,
@@ -277,6 +294,10 @@ async def detectar_solicitud_estudiante(update: Update, context: ContextTypes.DE
     if not message or not message.text:
         return
     
+    # Si el mensaje comienza con '/', es un comando y será manejado por CommandHandler
+    if message.text.strip().startswith('/'):
+        return
+
     bot_username = context.bot.username
     if not bot_username:
         try:
@@ -288,8 +309,7 @@ async def detectar_solicitud_estudiante(update: Update, context: ContextTypes.DE
     
     # Búsqueda insensible a mayúsculas/minúsculas del @bot_username
     if f"@{bot_username}".lower() not in message.text.lower():
-        from src.presentation.handlers.strike_handlers import monitorear_mensajes
-        await monitorear_mensajes(update, context)
+        # Retornar directamente; bot.py se encarga de ejecutar monitorear_mensajes
         return
     
     print(f"📩 Detectada mención a @{bot_username} en grupo '{chat.title}' (ID: {chat.id}) por {user.full_name}")
@@ -302,11 +322,6 @@ async def detectar_solicitud_estudiante(update: Update, context: ContextTypes.DE
         )
         return
     
-    contador = db.obtener_contador_asesorias(chat.id)
-    if contador >= 10:
-        await message.reply_text("❌ Se ha alcanzado el límite de 10 solicitudes por hoy. Intenta de nuevo mañana.")
-        return
-    
     # Remover la mención del bot sin importar mayúsculas/minúsculas
     import re
     pregunta = re.sub(re.escape(f"@{bot_username}"), "", message.text, flags=re.IGNORECASE).strip()
@@ -314,6 +329,23 @@ async def detectar_solicitud_estudiante(update: Update, context: ContextTypes.DE
         await message.reply_text("Por favor, escribe tu pregunta después de etiquetarme o usa /pregunta.")
         return
     
+    # Verificar si ya existe una asesoría pendiente idéntica
+    profesor_id = db.obtener_profesor_de_grupo(chat.id)
+    if profesor_id:
+        pendientes = db.obtener_asesorias_pendientes(profesor_id)
+        pregunta_duplicada = any(
+            s[4] == chat.id and s[2] == user.full_name and s[3].strip().lower() == pregunta.strip().lower()
+            for s in pendientes if len(s) > 4
+        )
+        if pregunta_duplicada:
+            await message.reply_text("ℹ️ Tu pregunta ya fue enviada al profesor y está pendiente de respuesta.")
+            return
+
+    contador = db.obtener_contador_asesorias(chat.id)
+    if contador >= 10:
+        await message.reply_text("❌ Se ha alcanzado el límite de 10 solicitudes por hoy. Intenta de nuevo mañana.")
+        return
+
     solicitud_id = db.agregar_asesoria(chat.id, chat.title or "Grupo", user.full_name, pregunta)
     db.incrementar_contador_asesorias(chat.id)
     print(f"✅ Asesoría guardada exitosamente en DB (ID: {solicitud_id}): '{pregunta}' para el grupo '{chat.title}'")
@@ -324,7 +356,6 @@ async def detectar_solicitud_estudiante(update: Update, context: ContextTypes.DE
     )
     
     # 🔔 NOTIFICACIÓN INSTANTÁNEA PRIVADA AL PROFESOR
-    profesor_id = db.obtener_profesor_de_grupo(chat.id)
     if profesor_id:
         await notificar_profesor_nueva_asesoria(
             context=context,

@@ -105,6 +105,10 @@ async def detectar_agregacion_grupo(update: Update, context: ContextTypes.DEFAUL
     if not bot_fue_agregado or not user:
         return
     
+    # Si el grupo ya está registrado, evitar duplicación de mensajes
+    if db.es_grupo_registrado(chat.id):
+        return
+    
     # Si el bot fue agregado por alguien que NO es profesor verificado, salir del grupo
     if not db.es_profesor_verificado(user.id):
         try:
