@@ -154,10 +154,31 @@ async def procesar_cedula_privada(update: Update, context: ContextTypes.DEFAULT_
         except Exception:
             pass
 
+        # Si el usuario ya estaba dentro del grupo, expulsarlo mediante /kick
+        fn_tg = user.first_name or ''
+        ln_tg = user.last_name or ''
+        nombre_display = f"{fn_tg} {ln_tg}".strip() or f"Usuario {user.id}"
+
+        try:
+            await context.bot.ban_chat_member(chat_id, user.id)
+            await context.bot.unban_chat_member(chat_id, user.id, only_if_banned=True)
+            db.resolver_pendiente(user.id, chat_id, 2)
+            
+            try:
+                await context.bot.send_message(
+                    chat_id,
+                    f"🚫 *{nombre_display}* ha sido expulsado del grupo (/kick) por ingresar una Cédula (*{cedula_ingresada}*) que no figura en la lista oficial.",
+                    parse_mode='Markdown'
+                )
+            except Exception:
+                pass
+        except Exception as e:
+            print(f"⚠️ No se pudo expulsar al usuario {user.id} del grupo {chat_id}: {e}")
+
         await message.reply_text(
             f"❌ *CÉDULA NO REGISTRADA*\n\n"
             f"La cédula *{cedula_ingresada}* no figura en la lista oficial de estudiantes para *{nombre_grupo}*.\n\n"
-            f"Tu solicitud de ingreso ha sido rechazada.",
+            f"Has sido expulsado del grupo.",
             parse_mode='Markdown'
         )
         context.user_data.pop('esperando_cedula_grupo', None)
