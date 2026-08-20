@@ -35,10 +35,33 @@ async def procesar_mensaje_natural(update: Update, context: ContextTypes.DEFAULT
         await procesar_cedula_privada(update, context)
         return
 
-    # Si no está verificado y no está ingresando la clave, ignorar
+    # Si no está verificado como profesor, atender de forma inteligente si es estudiante
     if not db.es_profesor_verificado(user.id):
-        await message.reply_text("🔒 Usa /start para verificar tu acceso como profesor.")
-        return
+        import re
+        texto = message.text.strip() if message.text else ""
+        if re.match(r'^\s*\d{5,9}\s*$', texto):
+            # Si envió únicamente un número (Cédula) pero no tenía el flag guardado aún, intentar procesar
+            pendientes = db.obtener_pendientes_activos()
+            pendiente_usuario = next((p for p in pendientes if p[0] == user.id), None)
+            if pendiente_usuario:
+                context.user_data['esperando_cedula_grupo'] = pendiente_usuario[1]
+                await procesar_cedula_privada(update, context)
+                return
+            else:
+                await message.reply_text(
+                    "👋 *Hola.*\n\n"
+                    "Para verificar tu acceso a la materia con tu Cédula, por favor ingresa primero al grupo mediante el enlace de invitación de tu profesor o presiona el botón *🔐 Verificar Cédula en privado* en el grupo.",
+                    parse_mode='Markdown'
+                )
+                return
+        else:
+            await message.reply_text(
+                "👋 *Bienvenido al Delegado Virtual — UDO Monagas*\n\n"
+                "🎓 *Estudiantes:* Para ingresar a tu materia, utiliza el enlace de invitación proporcionado por tu profesor o escribe tu número de *Cédula*.\n\n"
+                "👨‍🏫 *Profesores:* Escribe `/start` para ingresar tu contraseña de acceso.",
+                parse_mode='Markdown'
+            )
+            return
     
     # Flujo de verificación de miembros (recibe Excel como documento)
     if context.user_data.get('esperando_excel_verificacion') and message.document:

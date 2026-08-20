@@ -42,10 +42,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     db.registrar_profesor(user.id, user.username or user.first_name)
     
     await update.message.reply_text(
-        "🤖 *Delegado Virtual - UDO Monagas*\n\n"
-        "Este bot es de uso exclusivo para profesores de la "
-        "Universidad de Oriente, Núcleo Monagas.\n\n"
-        "¿Eres profesor?",
+        "👋 *Bienvenido al Delegado Virtual — UDO Monagas*\n\n"
+        "🎓 *Si eres estudiante:* Ingresa a tu materia utilizando el enlace de invitación de tu profesor o escribe tu número de *Cédula* para verificar tu inscripción.\n\n"
+        "👨‍🏫 *Si eres profesor:* Presiona el botón de abajo para verificar tu acceso con contraseña.",
         parse_mode='Markdown',
         reply_markup=get_auth_keyboard()
     )
