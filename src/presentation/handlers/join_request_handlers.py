@@ -42,19 +42,28 @@ async def procesar_solicitud_ingreso(update: Update, context: ContextTypes.DEFAU
     es_valido = es_nombre_coincidente(fn, ln, estudiantes)
 
     if es_valido:
-        # APROBAR SOLICITUD DE INGRESO
+        # APROBAR SOLICITUD DE INGRESO DIRECTAMENTE
         try:
             await join_request.approve()
 
-            # Registrar como miembro verificado en la base de datos
             db.registrar_miembro_telegram(
                 chat.id, user.id, fn, ln, user.username or ''
             )
-
-            # Si estaba en lista de pendientes, resolverlo
             db.resolver_pendiente(user.id, chat.id, 1)
 
             print(f"✅ Ingreso APROBADO: {nombre_display} en grupo {chat.title}")
+
+            # Mensaje de bienvenida en el grupo
+            try:
+                await context.bot.send_message(
+                    chat.id,
+                    f"🎉 *¡BIENVENIDO/A AL GRUPO!*\n\n"
+                    f"👤 *{nombre_display}*\n\n"
+                    f"Tu identidad ha sido verificada con éxito en la lista oficial.",
+                    parse_mode='Markdown'
+                )
+            except Exception:
+                pass
 
             # Notificar al estudiante por mensaje privado
             try:
@@ -67,33 +76,28 @@ async def procesar_solicitud_ingreso(update: Update, context: ContextTypes.DEFAU
                     parse_mode='Markdown'
                 )
             except Exception:
-                pass  # El usuario puede no haber iniciado chat privado previo con el bot
+                pass
 
         except TelegramError as e:
             print(f"❌ Error al aprobar a {user.id}: {e}")
 
     else:
-        # RECHAZAR SOLICITUD DE INGRESO
+        # Si el nombre no coincide directamente, solicitar Cédula por privado para pre-validación
         try:
-            await join_request.decline()
+            context.user_data['esperando_cedula_grupo'] = chat.id
 
-            print(f"🚫 Ingreso RECHAZADO: {nombre_display} en grupo {chat.title}")
-
-            # Notificar al estudiante por mensaje privado con instrucciones claras
+            await context.bot.send_message(
+                user.id,
+                f"🔐 *PRE-VERIFICACIÓN DE INGRESO — {chat.title}*\n\n"
+                f"Tu nombre actual en Telegram (*{nombre_display}*) aún no está verificado en la lista oficial.\n\n"
+                f"Para aprobar tu ingreso al grupo de forma segura, por favor responde a este mensaje enviando tu número de *Cédula* (solo números, ej: `12345678`):",
+                parse_mode='Markdown'
+            )
+            print(f"📩 Solicitud de Cédula enviada por DM a {nombre_display} para pre-ingreso a {chat.title}")
+        except Exception:
+            # Si el usuario no tiene chat previo iniciado con el bot, notificar y rechazar con instrucción
             try:
-                await context.bot.send_message(
-                    user.id,
-                    f"❌ *SOLICITUD DE INGRESO RECHAZADA — {chat.title}*\n\n"
-                    f"Tu nombre actual en Telegram (*{nombre_display}*) no figura en la lista oficial de estudiantes de esta materia.\n\n"
-                    f"⚠️ *REQUISITO OBLIGATORIO PARA PODER ENTRAR:*\n"
-                    f"Debes ir a Ajustes de Telegram y modificar tu perfil colocando:\n"
-                    f"👉 *PRIMER NOMBRE + PRIMER APELLIDO*\n\n"
-                    f"*(Ejemplo: Nombre: 'Carlos' | Apellido: 'García')*\n\n"
-                    f"Una vez actualizado tu nombre y apellido, vuelve a presionar el enlace de invitación para ingresar.",
-                    parse_mode='Markdown'
-                )
-            except Exception:
-                pass
-
-        except TelegramError as e:
-            print(f"❌ Error al rechazar a {user.id}: {e}")
+                await join_request.decline()
+                print(f"🚫 Ingreso RECHAZADO (sin chat previo): {nombre_display} en grupo {chat.title}")
+            except Exception as e:
+                print(f"❌ Error al rechazar a {user.id}: {e}")

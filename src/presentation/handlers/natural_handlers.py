@@ -30,6 +30,11 @@ async def procesar_mensaje_natural(update: Update, context: ContextTypes.DEFAULT
         await verificar_password(update, context)
         return
     
+    # 🔴 Si está un estudiante respondiendo su Cédula por privado
+    if context.user_data.get('esperando_cedula_grupo'):
+        await procesar_cedula_privada(update, context)
+        return
+
     # Si no está verificado y no está ingresando la clave, ignorar
     if not db.es_profesor_verificado(user.id):
         await message.reply_text("🔒 Usa /start para verificar tu acceso como profesor.")
@@ -95,3 +100,95 @@ async def procesar_mensaje_natural(update: Update, context: ContextTypes.DEFAULT
             await message.reply_text(respuesta)
     except Exception:
         await message.reply_text("Usa /menu para ver las opciones.")
+
+async def procesar_cedula_privada(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Procesa el número de Cédula ingresado por un estudiante en chat privado"""
+    user = update.effective_user
+    message = update.message
+    db = context.bot_data['db']
+    chat_id = context.user_data.get('esperando_cedula_grupo')
+
+    if not message or not message.text or not chat_id:
+        return
+
+    import re
+    cedula_ingresada = re.sub(r'\D', '', message.text)
+    if not cedula_ingresada:
+        await message.reply_text("⚠️ Por favor ingresa únicamente los números de tu Cédula (ej: `12345678`).", parse_mode='Markdown')
+        return
+
+    try:
+        chat = await context.bot.get_chat(chat_id)
+        nombre_grupo = chat.title or "el grupo"
+    except Exception:
+        nombre_grupo = "el grupo"
+
+    estudiante = db.buscar_estudiante_por_cedula(chat_id, cedula_ingresada)
+
+    if not estudiante:
+        try:
+            await context.bot.decline_chat_join_request(chat_id, user.id)
+        except Exception:
+            pass
+
+        await message.reply_text(
+            f"❌ *CÉDULA NO REGISTRADA*\n\n"
+            f"La cédula *{cedula_ingresada}* no figura en la lista oficial de estudiantes para *{nombre_grupo}*.\n\n"
+            f"Tu solicitud de ingreso ha sido rechazada.",
+            parse_mode='Markdown'
+        )
+        context.user_data.pop('esperando_cedula_grupo', None)
+        return
+
+    from src.application.verificacion_service import extraer_primer_nombre_y_apellido, comparar_perfil_telegram
+    p_nomb, p_apel = extraer_primer_nombre_y_apellido(estudiante[4], estudiante[3])
+    nombre_oficial = f"{p_nomb} {p_apel}".strip()
+
+    fn_tg = user.first_name or ''
+    ln_tg = user.last_name or ''
+    coincide = comparar_perfil_telegram(fn_tg, ln_tg, p_nomb, p_apel)
+
+    if coincide:
+        db.resolver_pendiente(user.id, chat_id, 1)
+        
+        # Aprobar solicitud de ingreso si existe
+        try:
+            await context.bot.approve_chat_join_request(chat_id, user.id)
+        except Exception:
+            pass
+
+        await message.reply_text(
+            f"🎉 *¡VERIFICACIÓN COMPLETADA!*\n\n"
+            f"👤 *{nombre_oficial}*\n\n"
+            f"Tu identidad ha sido verificada con éxito. ¡Tu solicitud de ingreso a *{nombre_grupo}* ha sido APROBADA!",
+            parse_mode='Markdown'
+        )
+        try:
+            await context.bot.send_message(
+                chat_id,
+                f"🎉 *¡BIENVENIDO/A AL GRUPO!*\n\n"
+                f"👤 *{nombre_oficial}*\n\n"
+                f"Tu identidad ha sido verificada con éxito en la lista oficial.",
+                parse_mode='Markdown'
+            )
+        except Exception:
+            pass
+    else:
+        # Rechazar temporalmente la solicitud actual para instar al cambio de nombre
+        try:
+            await context.bot.decline_chat_join_request(chat_id, user.id)
+        except Exception:
+            pass
+
+        await message.reply_text(
+            f"⚠️ *REQUISITO OBLIGATORIO — {nombre_grupo}*\n\n"
+            f"Tu cédula (*{cedula_ingresada}*) pertenece a **{nombre_oficial}** en la lista oficial.\n\n"
+            f"📌 *PARA QUE TU INGRESO SEA APROBADO:*\n"
+            f"Debes ir a Ajustes de Telegram y modificar tu perfil colocando:\n"
+            f"👉 *Nombre:* {p_nomb}\n"
+            f"👉 *Apellido:* {p_apel}\n\n"
+            f"Una vez actualizado tu perfil en Telegram, vuelve a presionar el enlace de invitación del grupo para ingresar automáticamente.",
+            parse_mode='Markdown'
+        )
+
+    context.user_data.pop('esperando_cedula_grupo', None)

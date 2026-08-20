@@ -144,8 +144,10 @@ async def detectar_agregacion_grupo(update: Update, context: ContextTypes.DEFAUL
     except Exception as e:
         print(f"⚠️ No se pudo enviar mensaje privado al profesor {user.id}: {e}")
 
+from datetime import datetime, timedelta
+
 async def solicitar_cedula_nuevo_estudiante(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Solicita la cédula a los nuevos estudiantes que se incorporan al grupo"""
+    """Solicita la cédula a los nuevos estudiantes que se incorporan al grupo y activa temporizador de 30 min"""
     chat = update.effective_chat
     db = context.bot_data['db']
 
@@ -158,6 +160,14 @@ async def solicitar_cedula_nuevo_estudiante(update: Update, context: ContextType
     if not db.es_grupo_registrado(chat.id):
         return
 
+    bot_username = context.bot.username
+    if not bot_username:
+        try:
+            bot_info = await context.bot.get_me()
+            bot_username = bot_info.username
+        except Exception:
+            bot_username = "DelegadoVirtualBot"
+
     bot_id = context.bot.id
     for member in update.message.new_chat_members:
         if member.id == bot_id or member.is_bot:
@@ -166,10 +176,24 @@ async def solicitar_cedula_nuevo_estudiante(update: Update, context: ContextType
         nombre_display = f"{member.first_name or ''} {member.last_name or ''}".strip() or f"Usuario {member.id}"
         user_tag = f"@{member.username}" if member.username else nombre_display
 
+        fecha_limite = datetime.now() + timedelta(minutes=30)
+        fecha_limite_str = fecha_limite.strftime('%H:%M')
+
+        # Registrar pendiente para control del temporizador de 30 min
+        db.agregar_pendiente_verificacion(
+            member.id, chat.id, nombre_display, fecha_limite.isoformat(), "PENDIENTE_CEDULA"
+        )
+
+        url_privado = f"https://t.me/{bot_username}?start=verificar_{chat.id}"
+        keyboard = [[InlineKeyboardButton("🔐 Verificar Cédula en privado", url=url_privado)]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+
         await update.message.reply_text(
             f"👋 *¡BIENVENIDO/A AL GRUPO — {user_tag}!*\n\n"
-            f"Para verificar tu inscripción en la materia, por favor escribe tu *número de Cédula* (solo números, ej: `12345678`).",
-            parse_mode='Markdown'
+            f"Para verificar tu inscripción en la materia de forma segura y privada, presiona el botón de abajo para enviar tu número de Cédula por chat privado.\n\n"
+            f"⏰ Tienes *30 minutos* (Límite: *{fecha_limite_str}*) para verificar tu Cédula o serás expulsado del grupo.",
+            parse_mode='Markdown',
+            reply_markup=reply_markup
         )
 
 async def manejar_respuesta_grupo(update: Update, context: ContextTypes.DEFAULT_TYPE):

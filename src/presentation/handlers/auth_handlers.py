@@ -8,6 +8,29 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     db = context.bot_data['db']
     
+    # Manejar inicio con parámetros de verificación de grupo (start=verificar_<chat_id>)
+    if context.args and context.args[0].startswith("verificar_"):
+        try:
+            chat_id = int(context.args[0].replace("verificar_", ""))
+            context.user_data['esperando_cedula_grupo'] = chat_id
+            
+            nombre_grupo = "tu materia"
+            try:
+                chat = await context.bot.get_chat(chat_id)
+                if chat and chat.title:
+                    nombre_grupo = chat.title
+            except Exception:
+                pass
+                
+            await update.message.reply_text(
+                f"🔐 *VERIFICACIÓN DE ESTUDIANTE*\n\n"
+                f"Para verificar tu acceso a *{nombre_grupo}*, por favor ingresa tu número de *Cédula* (solo números, ej: `12345678`):",
+                parse_mode='Markdown'
+            )
+            return
+        except ValueError:
+            pass
+
     if db.es_profesor_verificado(user.id):
         await update.message.reply_text(
             f"👋 ¡Bienvenido de nuevo, {user.first_name}!\n\n"

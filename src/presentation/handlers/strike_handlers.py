@@ -213,17 +213,8 @@ async def monitorear_mensajes(update: Update, context: ContextTypes.DEFAULT_TYPE
             fn_tg = user.first_name or ''
             ln_tg = user.last_name or ''
 
-            estudiantes = db.obtener_estudiantes_grupo(chat.id)
-            if es_nombre_coincidente(fn_tg, ln_tg, estudiantes):
-                db.resolver_pendiente(user.id, chat.id, 1)
-                p_display = nombre_oficial or f"{fn_tg} {ln_tg}".strip()
-                await message.reply_text(
-                    f"🎉 *¡VERIFICACIÓN COMPLETADA!*\n\n"
-                    f"👤 *{p_display}*\n\n"
-                    f"Tu perfil de Telegram ha sido verificado con éxito.",
-                    parse_mode='Markdown'
-                )
-            else:
+            if nombre_oficial == "PENDIENTE_CEDULA":
+                # Aún no ingresó su cédula, recordarle si el tiempo no ha expirado
                 fecha_limite_str = pendiente_actual[3]
                 try:
                     fecha_limite = datetime.fromisoformat(fecha_limite_str)
@@ -231,17 +222,44 @@ async def monitorear_mensajes(update: Update, context: ContextTypes.DEFAULT_TYPE
                         await context.bot.ban_chat_member(chat.id, user.id)
                         await context.bot.unban_chat_member(chat.id, user.id, only_if_banned=True)
                         db.resolver_pendiente(user.id, chat.id, 2)
-
-                        msg_oficial = f" a **{nombre_oficial}**" if nombre_oficial else ""
                         nombre_display = f"{fn_tg} {ln_tg}".strip() or f"Usuario {user.id}"
-
                         await message.reply_text(
-                            f"🚫 *{nombre_display}* ha sido expulsado del grupo (/kick) por no "
-                            f"actualizar su nombre de perfil en Telegram{msg_oficial} dentro del plazo de 30 minutos.",
+                            f"🚫 *{nombre_display}* ha sido expulsado del grupo (/kick) por no ingresar su "
+                            f"número de Cédula dentro del plazo de 30 minutos.",
                             parse_mode='Markdown'
                         )
                 except Exception as e:
-                    print(f"⚠️ Error al evaluar ultimátum o expulsar usuario: {e}")
+                    print(f"⚠️ Error al evaluar ultimátum de Cédula: {e}")
+            else:
+                estudiantes = db.obtener_estudiantes_grupo(chat.id)
+                if es_nombre_coincidente(fn_tg, ln_tg, estudiantes):
+                    db.resolver_pendiente(user.id, chat.id, 1)
+                    p_display = nombre_oficial or f"{fn_tg} {ln_tg}".strip()
+                    await message.reply_text(
+                        f"🎉 *¡VERIFICACIÓN COMPLETADA!*\n\n"
+                        f"👤 *{p_display}*\n\n"
+                        f"Tu perfil de Telegram ha sido verificado con éxito.",
+                        parse_mode='Markdown'
+                    )
+                else:
+                    fecha_limite_str = pendiente_actual[3]
+                    try:
+                        fecha_limite = datetime.fromisoformat(fecha_limite_str)
+                        if datetime.now() >= fecha_limite:
+                            await context.bot.ban_chat_member(chat.id, user.id)
+                            await context.bot.unban_chat_member(chat.id, user.id, only_if_banned=True)
+                            db.resolver_pendiente(user.id, chat.id, 2)
+
+                            msg_oficial = f" a **{nombre_oficial}**" if nombre_oficial else ""
+                            nombre_display = f"{fn_tg} {ln_tg}".strip() or f"Usuario {user.id}"
+
+                            await message.reply_text(
+                                f"🚫 *{nombre_display}* ha sido expulsado del grupo (/kick) por no "
+                                f"actualizar su nombre de perfil en Telegram{msg_oficial} dentro del plazo de 30 minutos.",
+                                parse_mode='Markdown'
+                            )
+                    except Exception as e:
+                        print(f"⚠️ Error al evaluar ultimátum o expulsar usuario: {e}")
     except Exception as e:
         print(f"⚠️ Error en flujo de verificación por Cédula: {e}")
 

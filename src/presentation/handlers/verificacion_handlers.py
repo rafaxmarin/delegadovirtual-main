@@ -342,29 +342,30 @@ async def verificar_pendientes_job(context: ContextTypes.DEFAULT_TYPE):
             current_first, current_last, current_username
         )
 
-        # Re-verificar contra la lista de estudiantes
-        estudiantes = db.obtener_estudiantes_grupo(p_chat_id)
-        miembro_actual = [(p_user_id, current_first, current_last, current_username)]
-        verificados, no_registrados = verificar_miembros(estudiantes, miembro_actual)
+        # Re-verificar contra la lista de estudiantes si no está pendiente de cédula
+        if nombre_oficial != "PENDIENTE_CEDULA":
+            estudiantes = db.obtener_estudiantes_grupo(p_chat_id)
+            miembro_actual = [(p_user_id, current_first, current_last, current_username)]
+            verificados, no_registrados = verificar_miembros(estudiantes, miembro_actual)
 
-        if verificados:
-            # Ahora coincide — marcar como verificado y dar bienvenida
-            db.resolver_pendiente(p_user_id, p_chat_id, 1)
-            p_display = nombre_oficial or f"{current_first} {current_last}".strip()
-            try:
-                await context.bot.send_message(
-                    p_chat_id,
-                    f"🎉 *¡VERIFICACIÓN COMPLETADA!*\n\n"
-                    f"👤 *{p_display}*\n\n"
-                    f"Tu perfil de Telegram ha sido verificado con éxito.",
-                    parse_mode='Markdown'
-                )
-            except Exception:
-                pass
-            print(f"✅ Verificación resuelta: {current_first} {current_last} en grupo {p_chat_id}")
-            continue
+            if verificados:
+                # Ahora coincide — marcar como verificado y dar bienvenida
+                db.resolver_pendiente(p_user_id, p_chat_id, 1)
+                p_display = nombre_oficial or f"{current_first} {current_last}".strip()
+                try:
+                    await context.bot.send_message(
+                        p_chat_id,
+                        f"🎉 *¡VERIFICACIÓN COMPLETADA!*\n\n"
+                        f"👤 *{p_display}*\n\n"
+                        f"Tu perfil de Telegram ha sido verificado con éxito.",
+                        parse_mode='Markdown'
+                    )
+                except Exception:
+                    pass
+                print(f"✅ Verificación resuelta: {current_first} {current_last} en grupo {p_chat_id}")
+                continue
 
-        # Sigue sin coincidir — verificar si expiró el plazo de 30 minutos
+        # Sigue sin coincidir o no ingresó Cédula — verificar si expiró el plazo de 30 minutos
         if ahora >= fecha_limite:
             # Tiempo agotado — expulsar mediante /kick
             try:
@@ -375,15 +376,18 @@ async def verificar_pendientes_job(context: ContextTypes.DEFAULT_TYPE):
                 db.resolver_pendiente(p_user_id, p_chat_id, 2)
 
                 nombre_display = f"{current_first} {current_last}".strip() or nombre_telegram
-                msg_oficial = f" a **{nombre_oficial}**" if nombre_oficial else ""
+
+                if nombre_oficial == "PENDIENTE_CEDULA":
+                    motivo_msg = "por no ingresar su número de Cédula para verificación dentro del plazo de 30 minutos.\n\nPodrá reingresar al grupo una vez que esté listo para ingresar su Cédula."
+                else:
+                    msg_oficial = f" a **{nombre_oficial}**" if nombre_oficial else ""
+                    motivo_msg = f"por no actualizar su nombre de perfil en Telegram{msg_oficial} dentro del plazo de 30 minutos.\n\nPodrá reingresar al grupo una vez modificado su nombre en Telegram."
 
                 # Notificar al grupo
                 try:
                     await context.bot.send_message(
                         p_chat_id,
-                        f"🚫 *{nombre_display}* ha sido expulsado del grupo (/kick) por no "
-                        f"actualizar su nombre de perfil en Telegram{msg_oficial} dentro del plazo de 30 minutos.\n\n"
-                        f"Podrá reingresar al grupo una vez modificado su nombre en Telegram.",
+                        f"🚫 *{nombre_display}* ha sido expulsado del grupo (/kick) {motivo_msg}",
                         parse_mode='Markdown'
                     )
                 except Exception:
