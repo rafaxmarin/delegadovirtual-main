@@ -144,6 +144,34 @@ async def detectar_agregacion_grupo(update: Update, context: ContextTypes.DEFAUL
     except Exception as e:
         print(f"⚠️ No se pudo enviar mensaje privado al profesor {user.id}: {e}")
 
+async def solicitar_cedula_nuevo_estudiante(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Solicita la cédula a los nuevos estudiantes que se incorporan al grupo"""
+    chat = update.effective_chat
+    db = context.bot_data['db']
+
+    if not chat or chat.type not in ['group', 'supergroup']:
+        return
+
+    if not update.message or not update.message.new_chat_members:
+        return
+
+    if not db.es_grupo_registrado(chat.id):
+        return
+
+    bot_id = context.bot.id
+    for member in update.message.new_chat_members:
+        if member.id == bot_id or member.is_bot:
+            continue
+
+        nombre_display = f"{member.first_name or ''} {member.last_name or ''}".strip() or f"Usuario {member.id}"
+        user_tag = f"@{member.username}" if member.username else nombre_display
+
+        await update.message.reply_text(
+            f"👋 *¡BIENVENIDO/A AL GRUPO — {user_tag}!*\n\n"
+            f"Para verificar tu inscripción en la materia, por favor escribe tu *número de Cédula* (solo números, ej: `12345678`).",
+            parse_mode='Markdown'
+        )
+
 async def manejar_respuesta_grupo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Maneja la aceptación o rechazo de un grupo"""
     query = update.callback_query

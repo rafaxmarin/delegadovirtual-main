@@ -164,3 +164,26 @@ def es_nombre_coincidente(first_name: str, last_name: str, estudiantes_grupo) ->
     
     return False
 
+
+def extraer_primer_nombre_y_apellido(nombres: str, apellidos: str):
+    """Extrae el primer nombre y el primer apellido capitalizados"""
+    p_nomb = (nombres or '').strip().split()[0].capitalize() if (nombres or '').strip() else ''
+    p_apel = (apellidos or '').strip().split()[0].capitalize() if (apellidos or '').strip() else ''
+    return p_nomb, p_apel
+
+
+def comparar_perfil_telegram(telegram_fn: str, telegram_ln: str, primer_nombre: str, primer_apellido: str) -> bool:
+    """Verifica si el nombre de perfil en Telegram coincide con primer_nombre y primer_apellido (o viceversa)"""
+    fn = _extraer_primer_palabra(telegram_fn)
+    ln = _extraer_primer_palabra(telegram_ln)
+    pn = _extraer_primer_palabra(primer_nombre)
+    pa = _extraer_primer_palabra(primer_apellido)
+    
+    if not pn or not pa:
+        return False
+        
+    match_normal = (fn == pn and ln == pa)
+    match_invertido = (fn == pa and ln == pn)
+    return match_normal or match_invertido
+
+

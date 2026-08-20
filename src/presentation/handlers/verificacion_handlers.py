@@ -304,7 +304,7 @@ async def notificar_grupo_verificacion(update: Update, context: ContextTypes.DEF
 
 
 async def verificar_pendientes_job(context: ContextTypes.DEFAULT_TYPE):
-    """Job periódico que revisa pendientes de verificación y expulsa si es necesario"""
+    """Job periódico que revisa pendientes de verificación y expulsa si transcurrieron 30 min"""
     db = context.bot_data['db']
 
     pendientes = db.obtener_pendientes_activos()
@@ -314,7 +314,11 @@ async def verificar_pendientes_job(context: ContextTypes.DEFAULT_TYPE):
     ahora = datetime.now()
 
     for pendiente in pendientes:
-        p_user_id, p_chat_id, nombre_telegram, fecha_limite_str, notificado, resuelto = pendiente
+        if len(pendiente) > 6:
+            p_user_id, p_chat_id, nombre_telegram, fecha_limite_str, notificado, resuelto, nombre_oficial = pendiente[:7]
+        else:
+            p_user_id, p_chat_id, nombre_telegram, fecha_limite_str, notificado, resuelto = pendiente[:6]
+            nombre_oficial = ""
 
         try:
             fecha_limite = datetime.fromisoformat(fecha_limite_str)
@@ -344,41 +348,48 @@ async def verificar_pendientes_job(context: ContextTypes.DEFAULT_TYPE):
         verificados, no_registrados = verificar_miembros(estudiantes, miembro_actual)
 
         if verificados:
-            # Ahora coincide — marcar como verificado
+            # Ahora coincide — marcar como verificado y dar bienvenida
             db.resolver_pendiente(p_user_id, p_chat_id, 1)
+            p_display = nombre_oficial or f"{current_first} {current_last}".strip()
+            try:
+                await context.bot.send_message(
+                    p_chat_id,
+                    f"🎉 *¡VERIFICACIÓN COMPLETADA!*\n\n"
+                    f"👤 *{p_display}*\n\n"
+                    f"Tu perfil de Telegram ha sido verificado con éxito.",
+                    parse_mode='Markdown'
+                )
+            except Exception:
+                pass
             print(f"✅ Verificación resuelta: {current_first} {current_last} en grupo {p_chat_id}")
             continue
 
-        # Sigue sin coincidir — verificar si expiró el plazo
+        # Sigue sin coincidir — verificar si expiró el plazo de 30 minutos
         if ahora >= fecha_limite:
-            # Tiempo agotado — expulsar
+            # Tiempo agotado — expulsar mediante /kick
             try:
                 await context.bot.ban_chat_member(p_chat_id, p_user_id)
-                # Desbanear para permitir re-ingreso futuro
+                # Desbanear inmediatamente para permitir re-ingreso futuro
                 await context.bot.unban_chat_member(p_chat_id, p_user_id, only_if_banned=True)
 
                 db.resolver_pendiente(p_user_id, p_chat_id, 2)
 
-                try:
-                    chat = await context.bot.get_chat(p_chat_id)
-                    nombre_grupo = chat.title
-                except Exception:
-                    nombre_grupo = "el grupo"
-
-                nombre_display = f"{current_first} {current_last}".strip()
+                nombre_display = f"{current_first} {current_last}".strip() or nombre_telegram
+                msg_oficial = f" a **{nombre_oficial}**" if nombre_oficial else ""
 
                 # Notificar al grupo
                 try:
                     await context.bot.send_message(
                         p_chat_id,
-                        f"🚫 *{nombre_display}* ha sido expulsado del grupo por no "
-                        f"actualizar su nombre según la lista oficial.",
+                        f"🚫 *{nombre_display}* ha sido expulsado del grupo (/kick) por no "
+                        f"actualizar su nombre de perfil en Telegram{msg_oficial} dentro del plazo de 30 minutos.\n\n"
+                        f"Podrá reingresar al grupo una vez modificado su nombre en Telegram.",
                         parse_mode='Markdown'
                     )
                 except Exception:
                     pass
 
-                print(f"🚫 Kick ejecutado: {nombre_display} de grupo {p_chat_id}")
+                print(f"🚫 Kick ejecutado (30 min): {nombre_display} de grupo {p_chat_id}")
 
             except TelegramError as e:
                 print(f"❌ Error al expulsar a {p_user_id} de {p_chat_id}: {e}")

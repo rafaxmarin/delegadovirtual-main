@@ -9,7 +9,10 @@ from src.presentation.handlers.menu_handlers import (
     menu, volver_menu, cerrar_menu, estudiante_recaudacion_callback,
     estudiante_guia_pago_callback, estudiante_guia_pregunta_callback
 )
-from src.presentation.handlers.grupo_handlers import estado_grupos, detalle_grupo, detectar_agregacion_grupo, manejar_respuesta_grupo, confirmar_desvincular_grupo, ejecutar_desvincular_grupo
+from src.presentation.handlers.grupo_handlers import (
+    estado_grupos, detalle_grupo, detectar_agregacion_grupo, manejar_respuesta_grupo,
+    confirmar_desvincular_grupo, ejecutar_desvincular_grupo, solicitar_cedula_nuevo_estudiante
+)
 from src.presentation.handlers.recaudacion_handlers import (
     menu_recaudacion, iniciar_recaudacion, procesar_recaudacion, confirmar_recaudacion,
     enviar_recaudacion, validar_comprobante, verificar_fechas_limite_job,
@@ -157,6 +160,7 @@ def main():
 
     # MENSAJES EN GRUPOS
     application.add_handler(ChatMemberHandler(detectar_agregacion_grupo, ChatMemberHandler.MY_CHAT_MEMBER))
+    application.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, solicitar_cedula_nuevo_estudiante))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.ChatType.GROUPS & filters.Regex(r'(?i)@'), detectar_solicitud_estudiante))
     application.add_handler(MessageHandler((filters.PHOTO | filters.Document.ALL) & filters.ChatType.GROUPS, validar_comprobante))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.ChatType.GROUPS, monitorear_mensajes))
@@ -167,10 +171,10 @@ def main():
         procesar_mensaje_natural
     ))
 
-    # Jobs periódicos (Revisión de fechas límite cada 5 min)
+    # Jobs periódicos (Revisión de fechas límite cada 5 min y verificación de pendientes cada 3 min)
     if application.job_queue:
         application.job_queue.run_repeating(verificar_fechas_limite_job, interval=300, first=15)
-        application.job_queue.run_repeating(verificar_pendientes_job, interval=1800, first=60)  # Cada 30 min
+        application.job_queue.run_repeating(verificar_pendientes_job, interval=180, first=30)  # Cada 3 min
 
     print("🚀 Delegado Virtual iniciado exitosamente!")
     application.run_polling(allowed_updates=Update.ALL_TYPES)

@@ -448,6 +448,17 @@ class FirebaseRepository:
                 ))
         return res
 
+    def buscar_estudiante_por_cedula(self, chat_id: int, cedula: str) -> Optional[Tuple]:
+        cedula_clean = re.sub(r'\D', '', cedula or '')
+        if not cedula_clean:
+            return None
+        estudiantes = self.obtener_estudiantes_grupo(chat_id)
+        for est in estudiantes:
+            c_db = re.sub(r'\D', '', str(est[0] or ''))
+            if c_db == cedula_clean:
+                return (None, chat_id, est[0], est[1], est[2], est[3])
+        return None
+
     def eliminar_estudiantes_grupo(self, chat_id: int):
         target_cid = self._to_int(chat_id)
         docs = self.db.collection('estudiantes_grupo').stream()
@@ -486,7 +497,7 @@ class FirebaseRepository:
         return res
 
     # --- PENDIENTES DE VERIFICACIÓN ---
-    def agregar_pendiente_verificacion(self, user_id: int, chat_id: int, nombre_telegram: str, fecha_limite: str):
+    def agregar_pendiente_verificacion(self, user_id: int, chat_id: int, nombre_telegram: str, fecha_limite: str, nombre_oficial: str = ""):
         cid = self._to_int(chat_id)
         uid = self._to_int(user_id)
         doc_id = re.sub(r'[^a-zA-Z0-9_-]', '_', f"{cid}_{uid}")
@@ -496,7 +507,8 @@ class FirebaseRepository:
             'nombre_telegram': nombre_telegram or '',
             'fecha_limite': fecha_limite or '',
             'notificado': 1,
-            'resuelto': 0
+            'resuelto': 0,
+            'nombre_oficial': nombre_oficial or ''
         })
 
     def obtener_pendientes_activos(self) -> List[Tuple]:
@@ -511,7 +523,8 @@ class FirebaseRepository:
                     d.get('nombre_telegram', ''),
                     d.get('fecha_limite', ''),
                     self._to_int(d.get('notificado')),
-                    self._to_int(d.get('resuelto'))
+                    self._to_int(d.get('resuelto')),
+                    d.get('nombre_oficial', '')
                 ))
         return res
 

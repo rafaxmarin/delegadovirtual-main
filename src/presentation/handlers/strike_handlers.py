@@ -141,61 +141,109 @@ async def monitorear_mensajes(update: Update, context: ContextTypes.DEFAULT_TYPE
     except Exception:
         pass  # No interrumpir el flujo si falla el registro
 
-    # 🔴 VERIFICACIÓN EN TIEMPO REAL AL ESCRIBIR
+    # 🔴 VERIFICACIÓN DE CÉDULA Y PERFIL EN TIEMPO REAL
     try:
-        estudiantes = db.obtener_estudiantes_grupo(chat.id)
-        if estudiantes:
-            fn = user.first_name or ''
-            ln = user.last_name or ''
-            es_valido = es_nombre_coincidente(fn, ln, estudiantes)
-            nombre_display = f"{fn} {ln}".strip() or f"Usuario {user.id}"
-            user_tag = f"@{user.username}" if user.username else nombre_display
+        texto_mensaje = (message.text or message.caption or '').strip()
+        import re
+        match_cedula = re.match(r'^\s*(?:v-?|V-?)?\s*(\d{5,9})\s*$', texto_mensaje)
 
-            if es_valido:
-                # Si estaba en pendientes, marcar como verificado
+        if match_cedula:
+            cedula_ingresada = match_cedula.group(1)
+            estudiante = db.buscar_estudiante_por_cedula(chat.id, cedula_ingresada)
+
+            if not estudiante:
+                await message.reply_text(
+                    f"❌ *CÉDULA NO REGISTRADA*\n\n"
+                    f"La cédula *{cedula_ingresada}* no figura en la lista oficial de estudiantes de este grupo.\n\n"
+                    f"No puedes permanecer en el grupo. Expulsando...",
+                    parse_mode='Markdown'
+                )
+                try:
+                    await context.bot.ban_chat_member(chat.id, user.id)
+                    await context.bot.unban_chat_member(chat.id, user.id, only_if_banned=True)
+                    db.resolver_pendiente(user.id, chat.id, 2)
+                except Exception as e:
+                    print(f"⚠️ Error al hacer /kick a usuario sin cédula registrada: {e}")
+                return
+
+            from src.application.verificacion_service import extraer_primer_nombre_y_apellido, comparar_perfil_telegram
+            p_nomb, p_apel = extraer_primer_nombre_y_apellido(estudiante[4], estudiante[3])
+            nombre_oficial = f"{p_nomb} {p_apel}".strip()
+
+            fn_tg = user.first_name or ''
+            ln_tg = user.last_name or ''
+            coincide = comparar_perfil_telegram(fn_tg, ln_tg, p_nomb, p_apel)
+
+            if coincide:
                 db.resolver_pendiente(user.id, chat.id, 1)
+                await message.reply_text(
+                    f"🎉 *¡BIENVENIDO/A AL GRUPO!*\n\n"
+                    f"👤 *{nombre_oficial}*\n\n"
+                    f"Tu identidad ha sido verificada con éxito en la lista oficial.",
+                    parse_mode='Markdown'
+                )
+                return
             else:
-                # Buscar si ya está en pendientes de este grupo
-                pendientes = db.obtener_pendientes_activos()
-                pendiente_actual = next((p for p in pendientes if p[0] == user.id and p[1] == chat.id), None)
+                fecha_limite = datetime.now() + timedelta(minutes=30)
+                fecha_limite_str = fecha_limite.strftime('%H:%M')
+                nombre_tg_display = f"{fn_tg} {ln_tg}".strip() or f"Usuario {user.id}"
+                db.agregar_pendiente_verificacion(user.id, chat.id, nombre_tg_display, fecha_limite.isoformat(), nombre_oficial)
 
-                if not pendiente_actual:
-                    # Primera vez detectado no verificado: darle 12 horas y notificar
-                    fecha_limite = datetime.now() + timedelta(hours=12)
-                    fecha_limite_str = fecha_limite.strftime('%d/%m/%Y %H:%M')
-                    db.agregar_pendiente_verificacion(user.id, chat.id, nombre_display, fecha_limite.isoformat())
+                user_tag = f"@{user.username}" if user.username else nombre_tg_display
 
-                    # Notificar al estudiante en el grupo
-                    await message.reply_text(
-                        f"⚠️ *AVISO DE VERIFICACIÓN — {user_tag}*\n\n"
-                        f"Tu nombre en Telegram (*{nombre_display}*) NO coincide con la lista oficial de estudiantes de este grupo.\n\n"
-                        f"📌 *Por favor modifica tu nombre y apellido en Telegram a:*\n"
-                        f"*PRIMER NOMBRE + PRIMER APELLIDO*\n\n"
-                        f"⏰ Tienes *12 horas* para realizar el cambio (Límite: *{fecha_limite_str}*). "
-                        f"De lo contrario, serás expulsado automáticamente del grupo.",
-                        parse_mode='Markdown'
-                    )
+                await message.reply_text(
+                    f"⚠️ *AVISO DE VERIFICACIÓN — {user_tag}*\n\n"
+                    f"Tu cédula (*{cedula_ingresada}*) fue verificada exitosamente a nombre de **{nombre_oficial}**.\n\n"
+                    f"📌 *REQUISITO OBLIGATORIO:*\n"
+                    f"Debes ir a Ajustes de Telegram y modificar tu perfil colocando:\n"
+                    f"👉 *Nombre:* {p_nomb}\n"
+                    f"👉 *Apellido:* {p_apel}\n\n"
+                    f"⏰ Tienes *30 minutos* para realizar este cambio (Límite: *{fecha_limite_str}*).\n"
+                    f"De lo contrario, serás expulsado del grupo mediante `/kick` para que puedas corregirlo e intentar nuevamente.",
+                    parse_mode='Markdown'
+                )
+                return
 
-                else:
-                    # Ya estaba en pendientes: verificar si transcurrieron las 12 horas
-                    fecha_limite_str = pendiente_actual[3]
-                    try:
-                        fecha_limite = datetime.fromisoformat(fecha_limite_str)
-                        if datetime.now() >= fecha_limite:
-                            # 12 horas cumplidas sin cambiar nombre -> expulsar
-                            await context.bot.ban_chat_member(chat.id, user.id)
-                            await context.bot.unban_chat_member(chat.id, user.id, only_if_banned=True)
-                            db.resolver_pendiente(user.id, chat.id, 2)
+        # Si no ingresó cédula, evaluar si tiene pendiente activo y ya actualizó su nombre
+        pendientes = db.obtener_pendientes_activos()
+        pendiente_actual = next((p for p in pendientes if p[0] == user.id and p[1] == chat.id), None)
 
-                            await message.reply_text(
-                                f"🚫 *{nombre_display}* ha sido expulsado del grupo por no "
-                                f"actualizar su nombre según la lista oficial dentro del plazo de 12 horas.",
-                                parse_mode='Markdown'
-                            )
-                    except Exception as e:
-                        print(f"⚠️ Error al evaluar ultimátum o expulsar usuario: {e}")
+        if pendiente_actual:
+            nombre_oficial = pendiente_actual[6] if len(pendiente_actual) > 6 else ""
+            fn_tg = user.first_name or ''
+            ln_tg = user.last_name or ''
+
+            estudiantes = db.obtener_estudiantes_grupo(chat.id)
+            if es_nombre_coincidente(fn_tg, ln_tg, estudiantes):
+                db.resolver_pendiente(user.id, chat.id, 1)
+                p_display = nombre_oficial or f"{fn_tg} {ln_tg}".strip()
+                await message.reply_text(
+                    f"🎉 *¡VERIFICACIÓN COMPLETADA!*\n\n"
+                    f"👤 *{p_display}*\n\n"
+                    f"Tu perfil de Telegram ha sido verificado con éxito.",
+                    parse_mode='Markdown'
+                )
+            else:
+                fecha_limite_str = pendiente_actual[3]
+                try:
+                    fecha_limite = datetime.fromisoformat(fecha_limite_str)
+                    if datetime.now() >= fecha_limite:
+                        await context.bot.ban_chat_member(chat.id, user.id)
+                        await context.bot.unban_chat_member(chat.id, user.id, only_if_banned=True)
+                        db.resolver_pendiente(user.id, chat.id, 2)
+
+                        msg_oficial = f" a **{nombre_oficial}**" if nombre_oficial else ""
+                        nombre_display = f"{fn_tg} {ln_tg}".strip() or f"Usuario {user.id}"
+
+                        await message.reply_text(
+                            f"🚫 *{nombre_display}* ha sido expulsado del grupo (/kick) por no "
+                            f"actualizar su nombre de perfil en Telegram{msg_oficial} dentro del plazo de 30 minutos.",
+                            parse_mode='Markdown'
+                        )
+                except Exception as e:
+                    print(f"⚠️ Error al evaluar ultimátum o expulsar usuario: {e}")
     except Exception as e:
-        print(f"⚠️ Error en flujo de verificación en tiempo real: {e}")
+        print(f"⚠️ Error en flujo de verificación por Cédula: {e}")
 
     contenido = ""
     if message.text:

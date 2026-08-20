@@ -164,6 +164,10 @@ class SQLiteRepository:
                 self.cursor.execute("ALTER TABLE pagos ADD COLUMN estudiante_id INTEGER")
             if 'numero_verificacion' not in cols_pagos:
                 self.cursor.execute("ALTER TABLE pagos ADD COLUMN numero_verificacion TEXT")
+
+            cols_pend = [c[1] for c in self.cursor.execute("PRAGMA table_info(pendientes_verificacion)").fetchall()]
+            if 'nombre_oficial' not in cols_pend:
+                self.cursor.execute("ALTER TABLE pendientes_verificacion ADD COLUMN nombre_oficial TEXT")
             
             self.conn.commit()
         except Exception as e:
@@ -419,6 +423,22 @@ class SQLiteRepository:
         )
         return self.cursor.fetchall()
 
+    def buscar_estudiante_por_cedula(self, chat_id: int, cedula: str) -> Optional[Tuple]:
+        import re
+        cedula_clean = re.sub(r'\D', '', cedula or '')
+        if not cedula_clean:
+            return None
+        self.cursor.execute(
+            'SELECT id, chat_id, cedula, apellidos, nombres, correo FROM estudiantes_grupo WHERE chat_id = ?',
+            (chat_id,)
+        )
+        filas = self.cursor.fetchall()
+        for f in filas:
+            c_db = re.sub(r'\D', '', str(f[2] or ''))
+            if c_db == cedula_clean:
+                return f
+        return None
+
     def eliminar_estudiantes_grupo(self, chat_id: int):
         self.cursor.execute('DELETE FROM estudiantes_grupo WHERE chat_id = ?', (chat_id,))
         self.conn.commit()
@@ -444,21 +464,21 @@ class SQLiteRepository:
         return self.cursor.fetchall()
 
     # --- PENDIENTES DE VERIFICACIÓN ---
-    def agregar_pendiente_verificacion(self, user_id: int, chat_id: int, nombre_telegram: str, fecha_limite: str):
+    def agregar_pendiente_verificacion(self, user_id: int, chat_id: int, nombre_telegram: str, fecha_limite: str, nombre_oficial: str = ""):
         # Eliminar pendiente anterior si existe para este usuario/grupo
         self.cursor.execute(
             'DELETE FROM pendientes_verificacion WHERE user_id = ? AND chat_id = ?',
             (user_id, chat_id)
         )
         self.cursor.execute(
-            'INSERT INTO pendientes_verificacion (user_id, chat_id, nombre_telegram, fecha_limite, notificado, resuelto) VALUES (?, ?, ?, ?, 1, 0)',
-            (user_id, chat_id, nombre_telegram, fecha_limite)
+            'INSERT INTO pendientes_verificacion (user_id, chat_id, nombre_telegram, fecha_limite, notificado, resuelto, nombre_oficial) VALUES (?, ?, ?, ?, 1, 0, ?)',
+            (user_id, chat_id, nombre_telegram, fecha_limite, nombre_oficial)
         )
         self.conn.commit()
 
     def obtener_pendientes_activos(self) -> List[Tuple]:
         self.cursor.execute(
-            'SELECT user_id, chat_id, nombre_telegram, fecha_limite, notificado, resuelto '
+            'SELECT user_id, chat_id, nombre_telegram, fecha_limite, notificado, resuelto, nombre_oficial '
             'FROM pendientes_verificacion WHERE resuelto = 0'
         )
         return self.cursor.fetchall()
