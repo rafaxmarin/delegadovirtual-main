@@ -4,11 +4,12 @@ from src.presentation.keyboards import get_menu_keyboard, get_estudiante_menu_ke
 from src.presentation.handlers.recaudacion_handlers import obtener_codigo_banco, limpiar_cedula, limpiar_telefono
 
 async def menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Maneja el comando /menu y despliega el menú (Profesor o Estudiante según perfil)"""
+    """Maneja el comando /menu y despliega el menú (Profesor o Estudiante Verificado)"""
     user = update.effective_user
     db = context.bot_data['db']
     
     es_profesor = db.es_profesor_verificado(user.id)
+    es_estudiante = db.es_estudiante_verificado(user.id)
     
     if es_profesor:
         texto_menu = (
@@ -16,9 +17,9 @@ async def menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "Selecciona la función que deseas utilizar:"
         )
         reply_markup = get_menu_keyboard()
-    else:
+    elif es_estudiante:
         texto_menu = (
-            "🎓 *MENÚ DE ESTUDIANTES - Delegado Virtual*\n\n"
+            "🎓 *MENÚ DE ESTUDIANTES — Delegado Virtual*\n\n"
             "¡Hola! Selecciona una opción o utiliza los siguientes comandos en tu grupo:\n\n"
             "💸 *Recaudaciones y Pagos:*\n"
             "• `/recaudacion` — Consulta los datos de la recaudación activa del grupo.\n"
@@ -28,6 +29,14 @@ async def menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "• `/pregunta [tu duda]` — Envía una duda directamente al buzón del profesor."
         )
         reply_markup = get_estudiante_menu_keyboard()
+    else:
+        texto_menu = (
+            "⚠️ *ACCESO RESTRINGIDO*\n\n"
+            "El comando `/menu` está reservado exclusivamente para **profesores** y **estudiantes verificados**.\n\n"
+            "🎓 *Si eres estudiante:* Para verificar tu cuenta y acceder al bot, ingresa al grupo de tu materia mediante el enlace de invitación de tu profesor o presiona el botón *🔐 Verificar Cédula en privado* en tu grupo."
+        )
+        keyboard = [[InlineKeyboardButton("❌ Cerrar panel", callback_data="menu_cerrar")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
     
     if update.callback_query:
         try:

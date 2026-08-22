@@ -536,5 +536,10 @@ class FirebaseRepository:
             {'resuelto': estado}, merge=True
         )
 
+    def es_estudiante_verificado(self, user_id: int) -> bool:
+        uid = self._to_int(user_id)
+        docs = self.db.collection('pendientes_verificacion').where('user_id', '==', uid).where('resuelto', '==', 1).limit(1).stream()
+        return any(True for _ in docs)
+
     def close(self):
         pass
