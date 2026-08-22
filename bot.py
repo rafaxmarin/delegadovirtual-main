@@ -162,7 +162,7 @@ def main():
     application.add_handler(ChatMemberHandler(detectar_agregacion_grupo, ChatMemberHandler.MY_CHAT_MEMBER))
     application.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, solicitar_cedula_nuevo_estudiante))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.ChatType.GROUPS & filters.Regex(r'(?i)@'), detectar_solicitud_estudiante))
-    application.add_handler(MessageHandler((filters.PHOTO | filters.Document.ALL) & filters.ChatType.GROUPS, validar_comprobante))
+    application.add_handler(MessageHandler(filters.CaptionRegex(r'(?i)/pago') & filters.ChatType.GROUPS, validar_comprobante))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.ChatType.GROUPS, monitorear_mensajes))
 
     # MENSAJES PRIVADOS (Atiende texto, documentos, fotos o cualquier contenido según estado)

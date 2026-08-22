@@ -424,14 +424,23 @@ async def validar_comprobante(update: Update, context: ContextTypes.DEFAULT_TYPE
         fname = doc.file_name or ""
         if mime.startswith('image/') or fname.lower().endswith(('.png', '.jpg', '.jpeg', '.webp', '.bmp', '.heic')):
             photo_file_id = doc.file_id
+    elif update.message.reply_to_message:
+        reply_msg = update.message.reply_to_message
+        if reply_msg.photo:
+            photo_file_id = reply_msg.photo[-1].file_id
+        elif reply_msg.document:
+            doc = reply_msg.document
+            mime = doc.mime_type or ""
+            fname = doc.file_name or ""
+            if mime.startswith('image/') or fname.lower().endswith(('.png', '.jpg', '.jpeg', '.webp', '.bmp', '.heic')):
+                photo_file_id = doc.file_id
     
     if not photo_file_id:
-        if update.message.text and '/pago' in update.message.text:
-            await update.message.reply_text(
-                "📸 *Por favor adjunta la imagen/captura de tu comprobante de pago* al usar el comando `/pago`.",
-                parse_mode='Markdown',
-                reply_to_message_id=update.message.message_id
-            )
+        await update.message.reply_text(
+            "📸 *Por favor adjunta la imagen/captura de tu comprobante de pago* al usar el comando `/pago` o responde a la imagen del comprobante con `/pago`.",
+            parse_mode='Markdown',
+            reply_to_message_id=update.message.message_id
+        )
         return
 
     print(f"📸 Imagen/Comprobante recibido de {estudiante_nombre} en chat ID: {chat_id}")
