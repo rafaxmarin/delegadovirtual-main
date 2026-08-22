@@ -191,18 +191,9 @@ async def estudiante_guia_pregunta_callback(update: Update, context: ContextType
     await query.edit_message_text(guia, parse_mode='Markdown', reply_markup=InlineKeyboardMarkup(keyboard))
 
 async def estudiante_guia_anuncios_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Acción del botón Anuncios del menú de estudiante"""
-    query = update.callback_query
-    if query:
-        await query.answer()
-
-    guia = (
-        "📢 *ANUNCIOS OFICIALES DEL PROFESOR*\n\n"
-        "Los comunicados oficiales, notas de voz estructuradas y avisos del profesor se publican directamente en el chat del grupo.\n\n"
-        "📌 *Todos los anuncios son FIJADOS automáticamente en la parte superior del grupo.* Puedes presionar el mensaje fijado en Telegram para consultar el último anuncio rápidamente."
-    )
-    keyboard = [[InlineKeyboardButton("🔙 Volver al menú", callback_data="volver_menu")]]
-    await query.edit_message_text(guia, parse_mode='Markdown', reply_markup=InlineKeyboardMarkup(keyboard))
+    """Acción del botón Anuncios del menú de estudiante (despliega el último anuncio registrado)"""
+    from src.presentation.handlers.anuncio_handlers import consultar_ultimo_anuncio
+    await consultar_ultimo_anuncio(update, context)
 
 async def estudiante_guia_material_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Acción del botón Materiales del menú de estudiante"""

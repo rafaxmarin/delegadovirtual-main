@@ -135,6 +135,19 @@ class SQLiteRepository:
             )
         ''')
 
+        # Tabla de anuncios oficiales del profesor
+        self.cursor.execute('''
+            CREATE TABLE IF NOT EXISTS anuncios (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                chat_id INTEGER,
+                texto TEXT,
+                tipo_media TEXT,
+                media_id TEXT,
+                fecha_hora TEXT,
+                FOREIGN KEY (chat_id) REFERENCES grupos(chat_id)
+            )
+        ''')
+
         # Tabla de pendientes de verificación (ultimátum 12h)
         self.cursor.execute('''
             CREATE TABLE IF NOT EXISTS pendientes_verificacion (
@@ -496,6 +509,26 @@ class SQLiteRepository:
             (user_id,)
         )
         return self.cursor.fetchone() is not None
+
+    def guardar_anuncio(self, chat_id: int, texto: str, tipo_media: str = None, media_id: str = None):
+        from datetime import datetime
+        fecha_str = datetime.now().strftime('%d/%m/%Y %H:%M')
+        self.cursor.execute(
+            'INSERT INTO anuncios (chat_id, texto, tipo_media, media_id, fecha_hora) VALUES (?, ?, ?, ?, ?)',
+            (chat_id, texto, tipo_media, media_id, fecha_str)
+        )
+        self.conn.commit()
+
+    def obtener_ultimo_anuncio(self, chat_id: int) -> Optional[Tuple]:
+        self.cursor.execute(
+            'SELECT texto, tipo_media, media_id, fecha_hora FROM anuncios WHERE chat_id = ? ORDER BY id DESC LIMIT 1',
+            (chat_id,)
+        )
+        return self.cursor.fetchone()
+
+    def eliminar_anuncios_grupo(self, chat_id: int):
+        self.cursor.execute('DELETE FROM anuncios WHERE chat_id = ?', (chat_id,))
+        self.conn.commit()
 
     def close(self):
         self.conn.close()

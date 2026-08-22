@@ -14,7 +14,7 @@ class Config:
     DEEPSEEK_MODEL: str = os.getenv('DEEPSEEK_MODEL', 'deepseek-chat')
     PROFESOR_PASSWORD: str = os.getenv('PROFESOR_PASSWORD', '')
     DATABASE_PATH: str = os.getenv('DATABASE_PATH', 'delegado_virtual.db')
-    DB_TYPE: str = os.getenv('DB_TYPE', 'sqlite').lower()
+    DB_TYPE: str = os.getenv('DB_TYPE', 'firebase').lower()
     FIREBASE_CREDENTIALS_PATH: str = os.getenv('FIREBASE_CREDENTIALS_PATH', 'firebase-credentials.json')
     FIREBASE_CREDENTIALS_JSON: str = os.getenv('FIREBASE_CREDENTIALS_JSON', '')
 

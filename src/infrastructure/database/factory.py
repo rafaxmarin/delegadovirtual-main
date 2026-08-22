@@ -2,7 +2,7 @@ from src.config import Config
 from src.infrastructure.database.sqlite_repository import SQLiteRepository
 
 def get_repository():
-    db_type = getattr(Config, 'DB_TYPE', 'sqlite').lower()
+    db_type = getattr(Config, 'DB_TYPE', 'firebase').lower()
     if db_type == 'firebase':
         try:
             from src.infrastructure.database.firebase_repository import FirebaseRepository

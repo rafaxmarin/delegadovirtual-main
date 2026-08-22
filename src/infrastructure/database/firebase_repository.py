@@ -541,5 +541,33 @@ class FirebaseRepository:
         docs = self.db.collection('pendientes_verificacion').where('user_id', '==', uid).where('resuelto', '==', 1).limit(1).stream()
         return any(True for _ in docs)
 
+    def guardar_anuncio(self, chat_id: int, texto: str, tipo_media: str = None, media_id: str = None):
+        from datetime import datetime
+        cid = self._to_int(chat_id)
+        fecha_str = datetime.now().strftime('%d/%m/%Y %H:%M')
+        doc_data = {
+            'chat_id': cid,
+            'texto': texto or '',
+            'tipo_media': tipo_media or '',
+            'media_id': media_id or '',
+            'fecha_hora': fecha_str,
+            'created_at': datetime.now().timestamp()
+        }
+        self.db.collection('anuncios').add(doc_data)
+
+    def obtener_ultimo_anuncio(self, chat_id: int) -> Optional[Tuple]:
+        cid = self._to_int(chat_id)
+        docs = self.db.collection('anuncios').where('chat_id', '==', cid).order_by('created_at', direction='DESCENDING').limit(1).stream()
+        for doc in docs:
+            d = doc.to_dict()
+            return (d.get('texto', ''), d.get('tipo_media', ''), d.get('media_id', ''), d.get('fecha_hora', ''))
+        return None
+
+    def eliminar_anuncios_grupo(self, chat_id: int):
+        cid = self._to_int(chat_id)
+        docs = self.db.collection('anuncios').where('chat_id', '==', cid).stream()
+        for doc in docs:
+            doc.reference.delete()
+
     def close(self):
         pass

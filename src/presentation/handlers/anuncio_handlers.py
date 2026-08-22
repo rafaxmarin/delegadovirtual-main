@@ -238,11 +238,141 @@ async def enviar_anuncio_grupo(update: Update, context: ContextTypes.DEFAULT_TYP
                 await context.bot.pin_chat_message(chat_id, msg_enviado.message_id)
             except Exception:
                 pass
+            
+            # Guardar el anuncio en la base de datos
+            media_id_str = str(anuncio_media) if anuncio_media else None
+            db.guardar_anuncio(chat_id, anuncio_formal, tipo_media, media_id_str)
         
-        await query.edit_message_text("✅ Anuncio enviado exitosamente.")
+        await query.edit_message_text("✅ Anuncio enviado y fijado exitosamente.")
         context.user_data.pop('anuncio_formal', None)
         context.user_data.pop('anuncio_media', None)
         context.user_data.pop('tipo_anuncio_media', None)
         
     except Exception as e:
         await query.edit_message_text(f"❌ Error al enviar el anuncio: {str(e)}")
+
+async def consultar_ultimo_anuncio(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Consulta y despliega el último anuncio publicado en el grupo (Comando /anuncio y Botón Menú)"""
+    chat_type = update.effective_chat.type
+    chat_id = update.effective_chat.id
+    user_id = update.effective_user.id
+    db = context.bot_data['db']
+
+    # Si se invoca desde chat privado, buscar el grupo activo del estudiante o profesor
+    if chat_type == 'private':
+        target_chat_id = None
+        grupos = db.obtener_todos_los_grupos()
+        for g_id, _ in grupos:
+            try:
+                member = await context.bot.get_chat_member(g_id, user_id)
+                if member.status in ['member', 'administrator', 'creator']:
+                    target_chat_id = g_id
+                    break
+            except Exception:
+                continue
+
+        if not target_chat_id:
+            msg_text = "⚠️ *No se encontró ningún grupo registrado asociado a tu cuenta.*"
+            if update.callback_query:
+                keyboard = [[InlineKeyboardButton("🔙 Volver al menú", callback_data="volver_menu")]]
+                await update.callback_query.edit_message_text(msg_text, parse_mode='Markdown', reply_markup=InlineKeyboardMarkup(keyboard))
+            elif update.message:
+                await update.message.reply_text(msg_text, parse_mode='Markdown')
+            return
+        
+        chat_id = target_chat_id
+
+    anuncio = db.obtener_ultimo_anuncio(chat_id)
+    if not anuncio:
+        msg_text = "⚠️ *No hay ningún anuncio registrado en la base de datos para este grupo.*"
+        if update.callback_query:
+            keyboard = [[InlineKeyboardButton("🔙 Volver al menú", callback_data="volver_menu")]]
+            await update.callback_query.edit_message_text(msg_text, parse_mode='Markdown', reply_markup=InlineKeyboardMarkup(keyboard))
+        elif update.message:
+            await update.message.reply_text(msg_text, parse_mode='Markdown')
+        return
+
+    texto, tipo_media, media_id, fecha_hora = anuncio
+    contenido = f"📢 *ÚLTIMO ANUNCIO OFICIAL*\n📅 *Fecha:* {fecha_hora}\n\n{texto}"
+
+    if update.callback_query:
+        query = update.callback_query
+        await query.answer()
+        keyboard = [[InlineKeyboardButton("🔙 Volver al menú", callback_data="volver_menu")]]
+        
+        await query.edit_message_text(contenido, parse_mode='Markdown', reply_markup=InlineKeyboardMarkup(keyboard))
+        
+        if tipo_media and tipo_media != 'texto' and media_id:
+            try:
+                if tipo_media == 'documento':
+                    await context.bot.send_document(query.message.chat_id, media_id)
+                elif tipo_media == 'foto':
+                    await context.bot.send_photo(query.message.chat_id, media_id)
+                elif tipo_media == 'video':
+                    await context.bot.send_video(query.message.chat_id, media_id)
+                elif tipo_media == 'audio':
+                    await context.bot.send_audio(query.message.chat_id, media_id)
+                elif tipo_media == 'voz':
+                    await context.bot.send_voice(query.message.chat_id, media_id)
+            except Exception:
+                pass
+    elif update.message:
+        reply_to = update.message.message_id
+        await update.message.reply_text(contenido, parse_mode='Markdown', reply_to_message_id=reply_to)
+        if tipo_media and tipo_media != 'texto' and media_id:
+            try:
+                if tipo_media == 'documento':
+                    await context.bot.send_document(chat_id, media_id)
+                elif tipo_media == 'foto':
+                    await context.bot.send_photo(chat_id, media_id)
+                elif tipo_media == 'video':
+                    await context.bot.send_video(chat_id, media_id)
+                elif tipo_media == 'audio':
+                    await context.bot.send_audio(chat_id, media_id)
+                elif tipo_media == 'voz':
+                    await context.bot.send_voice(chat_id, media_id)
+            except Exception:
+                pass
+
+async def limpiar_anuncios_profesor(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Permite al profesor seleccionar un grupo y vaciar la base de datos de sus anuncios"""
+    query = update.callback_query
+    await query.answer()
+    user = query.from_user
+    db = context.bot_data['db']
+
+    if not db.es_profesor_verificado(user.id):
+        await query.edit_message_text("❌ Solo el profesor puede realizar esta acción.")
+        return
+
+    grupos = db.obtener_grupos_profesor(user.id)
+    if not grupos:
+        await query.edit_message_text("❌ No tienes grupos registrados.")
+        return
+
+    keyboard = []
+    for chat_id, nombre in grupos:
+        keyboard.append([InlineKeyboardButton(f"🗑️ Borrar anuncios de {nombre}", callback_data=f"confirmar_borrar_anuncios_{chat_id}")])
+    keyboard.append([InlineKeyboardButton("🔙 Cancelar", callback_data="volver_menu")])
+    
+    await query.edit_message_text(
+        "🗑️ *BORRAR HISTORIAL DE ANUNCIOS*\n\n"
+        "Selecciona el grupo del cual deseas eliminar todos los anuncios almacenados en la base de datos:",
+        parse_mode='Markdown',
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+async def ejecutar_borrar_anuncios(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Ejecuta el borrado del historial de anuncios para el grupo seleccionado"""
+    query = update.callback_query
+    await query.answer()
+    
+    chat_id = int(query.data.replace("confirmar_borrar_anuncios_", ""))
+    user_id = query.from_user.id
+    db = context.bot_data['db']
+
+    if not await verificar_pertenencia_grupo(chat_id, user_id, db, query):
+        return
+
+    db.eliminar_anuncios_grupo(chat_id)
+    await query.edit_message_text("✅ *Se han eliminado todos los anuncios de la base de datos para este grupo.*", parse_mode='Markdown')

@@ -27,7 +27,10 @@ from src.presentation.handlers.asesoria_handlers import buzon_asesoria, responde
 from src.presentation.handlers.strike_handlers import control_strikes, ver_historial_strikes, monitorear_mensajes
 from src.presentation.handlers.alumno_handlers import agregar_alumno, invitar_alumno_grupo, eliminar_alumno, listar_estudiantes_grupo, confirmar_eliminar_alumno
 from src.presentation.handlers.material_handlers import compartir_material, confirmar_material, enviar_material
-from src.presentation.handlers.anuncio_handlers import emitir_anuncio, confirmar_anuncio, enviar_anuncio_grupo
+from src.presentation.handlers.anuncio_handlers import (
+    emitir_anuncio, confirmar_anuncio, enviar_anuncio_grupo,
+    consultar_ultimo_anuncio, limpiar_anuncios_profesor, ejecutar_borrar_anuncios
+)
 from src.presentation.handlers.reglamento_handlers import fijar_reglamento, confirmar_reglamento, fijar_reglamento_grupo
 from src.presentation.handlers.natural_handlers import procesar_mensaje_natural
 from src.presentation.handlers.verificacion_handlers import (
@@ -77,6 +80,7 @@ def main():
     application.add_handler(CommandHandler('pago', validar_comprobante))
     application.add_handler(CommandHandler('efectivo', registrar_pago_efectivo))
     application.add_handler(CommandHandler('recaudacion', consultar_recaudacion_comando))
+    application.add_handler(CommandHandler('anuncio', consultar_ultimo_anuncio))
     application.add_handler(CommandHandler('api', config_api_comando))
 
     # COMANDOS DE CONFIGURACIÓN DE IA (GEMINI Y DEEPSEEK)
@@ -128,6 +132,8 @@ def main():
     # CALLBACKS DE ANUNCIOS
     application.add_handler(CallbackQueryHandler(confirmar_anuncio, pattern='^confirmar_anuncio$'))
     application.add_handler(CallbackQueryHandler(enviar_anuncio_grupo, pattern='^enviar_anuncio_'))
+    application.add_handler(CallbackQueryHandler(limpiar_anuncios_profesor, pattern='^limpiar_anuncios_profesor$'))
+    application.add_handler(CallbackQueryHandler(ejecutar_borrar_anuncios, pattern='^confirmar_borrar_anuncios_'))
 
     # CALLBACKS DE RECAUDACIÓN
     application.add_handler(CallbackQueryHandler(confirmar_recaudacion, pattern='^confirmar_recaudacion$'))
