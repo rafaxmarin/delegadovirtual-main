@@ -530,6 +530,19 @@ class SQLiteRepository:
         self.cursor.execute('DELETE FROM anuncios WHERE chat_id = ?', (chat_id,))
         self.conn.commit()
 
+    def guardar_material(self, chat_id: int, tipo: str, contenido: str, descripcion: str = None):
+        from datetime import datetime
+        fecha_str = datetime.now().strftime('%d/%m/%Y %H:%M')
+        self.cursor.execute(
+            'INSERT INTO materiales (chat_id, tipo, contenido, descripcion, fecha_hora) VALUES (?, ?, ?, ?, ?)',
+            (chat_id, tipo, str(contenido), descripcion, fecha_str)
+        )
+        self.conn.commit()
+
+    def eliminar_materiales_grupo(self, chat_id: int):
+        self.cursor.execute('DELETE FROM materiales WHERE chat_id = ?', (chat_id,))
+        self.conn.commit()
+
     def close(self):
         self.conn.close()
 

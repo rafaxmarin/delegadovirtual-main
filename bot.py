@@ -26,7 +26,10 @@ from src.presentation.handlers.minuta_handlers import redactar_minuta, recibir_c
 from src.presentation.handlers.asesoria_handlers import buzon_asesoria, responder_asesoria, ignorar_asesoria, detectar_solicitud_estudiante, enviar_pregunta_asesoria
 from src.presentation.handlers.strike_handlers import control_strikes, ver_historial_strikes, monitorear_mensajes
 from src.presentation.handlers.alumno_handlers import agregar_alumno, invitar_alumno_grupo, eliminar_alumno, listar_estudiantes_grupo, confirmar_eliminar_alumno
-from src.presentation.handlers.material_handlers import compartir_material, confirmar_material, enviar_material
+from src.presentation.handlers.material_handlers import (
+    compartir_material, iniciar_compartir_material, confirmar_material,
+    enviar_material, limpiar_materiales_profesor, ejecutar_borrar_materiales
+)
 from src.presentation.handlers.anuncio_handlers import (
     emitir_anuncio, confirmar_anuncio, enviar_anuncio_grupo,
     consultar_ultimo_anuncio, limpiar_anuncios_profesor, ejecutar_borrar_anuncios
@@ -146,8 +149,11 @@ def main():
     application.add_handler(CallbackQueryHandler(despachar_minuta, pattern='^despachar_minuta_'))
 
     # CALLBACKS DE MATERIAL
+    application.add_handler(CallbackQueryHandler(iniciar_compartir_material, pattern='^iniciar_compartir_material$'))
     application.add_handler(CallbackQueryHandler(confirmar_material, pattern='^confirmar_material$'))
     application.add_handler(CallbackQueryHandler(enviar_material, pattern='^enviar_material_'))
+    application.add_handler(CallbackQueryHandler(limpiar_materiales_profesor, pattern='^limpiar_materiales_profesor$'))
+    application.add_handler(CallbackQueryHandler(ejecutar_borrar_materiales, pattern='^confirmar_borrar_materiales_'))
 
     # CALLBACKS DE ASESORÍA
     application.add_handler(CallbackQueryHandler(responder_asesoria, pattern='^responder_asesoria_'))

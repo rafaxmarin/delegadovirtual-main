@@ -11,7 +11,7 @@ def get_menu_keyboard() -> InlineKeyboardMarkup:
             InlineKeyboardButton("📝 Redactar minuta", callback_data="menu_minuta")
         ],
         [
-            InlineKeyboardButton("📚 Compartir material", callback_data="menu_material"),
+            InlineKeyboardButton("📚 Material de estudio", callback_data="menu_material"),
             InlineKeyboardButton("📬 Buzón de asesoría", callback_data="menu_asesoria")
         ],
         [

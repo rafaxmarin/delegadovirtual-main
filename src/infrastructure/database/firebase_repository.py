@@ -569,5 +569,25 @@ class FirebaseRepository:
         for doc in docs:
             doc.reference.delete()
 
+    def guardar_material(self, chat_id: int, tipo: str, contenido: str, descripcion: str = None):
+        from datetime import datetime
+        cid = self._to_int(chat_id)
+        fecha_str = datetime.now().strftime('%d/%m/%Y %H:%M')
+        doc_data = {
+            'chat_id': cid,
+            'tipo': tipo or '',
+            'contenido': contenido or '',
+            'descripcion': descripcion or '',
+            'fecha_hora': fecha_str,
+            'created_at': datetime.now().timestamp()
+        }
+        self.db.collection('materiales').add(doc_data)
+
+    def eliminar_materiales_grupo(self, chat_id: int):
+        cid = self._to_int(chat_id)
+        docs = self.db.collection('materiales').where('chat_id', '==', cid).stream()
+        for doc in docs:
+            doc.reference.delete()
+
     def close(self):
         pass

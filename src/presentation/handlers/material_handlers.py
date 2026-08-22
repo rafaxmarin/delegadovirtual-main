@@ -6,7 +6,26 @@ from src.presentation.auth_utils import verificar_pertenencia_grupo
 gemini = AIService()
 
 async def compartir_material(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Inicia el flujo para compartir material de estudio"""
+    """Despliega el menú de Material de Estudio para el profesor"""
+    query = update.callback_query
+    await query.answer()
+    
+    keyboard = [
+        [InlineKeyboardButton("📤 Compartir nuevo material", callback_data="iniciar_compartir_material")],
+        [InlineKeyboardButton("🗑️ Borrar historial de materiales", callback_data="limpiar_materiales_profesor")],
+        [InlineKeyboardButton("🔙 Volver al menú", callback_data="volver_menu")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await query.edit_message_text(
+        "📚 *GESTIÓN DE MATERIAL DE ESTUDIO*\n\n"
+        "Selecciona la opción que deseas realizar:",
+        parse_mode='Markdown',
+        reply_markup=reply_markup
+    )
+
+async def iniciar_compartir_material(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Inicia el flujo para recibir y compartir material de estudio"""
     query = update.callback_query
     await query.answer()
     
@@ -163,6 +182,10 @@ async def enviar_material(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except Exception:
                 pass
 
+            # Guardar el material en la base de datos
+            mat_id_str = str(getattr(material, 'file_id', material))
+            db.guardar_material(chat_id, tipo, mat_id_str, mensaje_intro)
+
         await query.edit_message_text("✅ Material enviado y fijado exitosamente.")
         
         context.user_data.pop('material', None)
@@ -171,3 +194,46 @@ async def enviar_material(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
     except Exception as e:
         await query.edit_message_text(f"❌ Error al enviar el material: {str(e)}")
+
+async def limpiar_materiales_profesor(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Permite al profesor seleccionar un grupo y vaciar la base de datos de sus materiales"""
+    query = update.callback_query
+    await query.answer()
+    user = query.from_user
+    db = context.bot_data['db']
+
+    if not db.es_profesor_verificado(user.id):
+        await query.edit_message_text("❌ Solo el profesor puede realizar esta acción.")
+        return
+
+    grupos = db.obtener_grupos_profesor(user.id)
+    if not grupos:
+        await query.edit_message_text("❌ No tienes grupos registrados.")
+        return
+
+    keyboard = []
+    for chat_id, nombre in grupos:
+        keyboard.append([InlineKeyboardButton(f"🗑️ Borrar materiales de {nombre}", callback_data=f"confirmar_borrar_materiales_{chat_id}")])
+    keyboard.append([InlineKeyboardButton("🔙 Cancelar", callback_data="volver_menu")])
+    
+    await query.edit_message_text(
+        "🗑️ *BORRAR HISTORIAL DE MATERIALES*\n\n"
+        "Selecciona el grupo del cual deseas eliminar todos los materiales almacenados en la base de datos:",
+        parse_mode='Markdown',
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+async def ejecutar_borrar_materiales(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Ejecuta el borrado del historial de materiales para el grupo seleccionado"""
+    query = update.callback_query
+    await query.answer()
+    
+    chat_id = int(query.data.replace("confirmar_borrar_materiales_", ""))
+    user_id = query.from_user.id
+    db = context.bot_data['db']
+
+    if not await verificar_pertenencia_grupo(chat_id, user_id, db, query):
+        return
+
+    db.eliminar_materiales_grupo(chat_id)
+    await query.edit_message_text("✅ *Se han eliminado todos los materiales de la base de datos para este grupo.*", parse_mode='Markdown')
