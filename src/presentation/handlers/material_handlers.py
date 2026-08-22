@@ -155,7 +155,7 @@ async def enviar_material(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif tipo == 'link':
             msg_enviado = await context.bot.send_message(chat_id, f"{mensaje_completo}\n\n🔗 {material}", parse_mode='Markdown')
         elif tipo == 'texto':
-            msg_enviado = await context.bot.send_message(chat_id, f"{mensaje_completo}\n\n📖 {material}", parse_mode='Markdown')
+            msg_enviado = await context.bot.send_message(chat_id, mensaje_completo, parse_mode='Markdown')
         
         if msg_enviado:
             try:
