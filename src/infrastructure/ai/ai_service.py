@@ -16,6 +16,10 @@ class AIService:
     def estructurar_texto_formal(self, texto: str) -> str:
         return self._get_adapter().estructurar_texto_formal(texto)
 
+    def procesar_nota_voz_anuncio(self, audio_bytes: bytes, mime_type: str = "audio/ogg") -> str:
+        # Audio: Gemini gestiona el procesamiento y transcripción de notas de voz
+        return GeminiAdapter().procesar_nota_voz_anuncio(audio_bytes, mime_type)
+
     def transcribir_y_estructurar(self, texto_o_transcripcion: str) -> str:
         return self._get_adapter().transcribir_y_estructurar(texto_o_transcripcion)
 

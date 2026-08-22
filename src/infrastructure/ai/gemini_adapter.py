@@ -25,6 +25,20 @@ class GeminiAdapter:
         response = self.model.generate_content(prompt)
         return response.text.strip()
     
+    def procesar_nota_voz_anuncio(self, audio_bytes: bytes, mime_type: str = "audio/ogg") -> str:
+        """Procesa una nota de voz, transcribe su contenido y genera un anuncio formal"""
+        prompt = """
+        Escucha atentamente el audio adjunto. Corresponde a una nota de voz grabada por un profesor universitario.
+        Transcribe lo dicho y estructúralo como un anuncio formal, claro y respetuoso para sus estudiantes.
+        Solo responde con el texto del anuncio formal, sin comillas, notas ni introducciones.
+        """
+        audio_part = {
+            "mime_type": mime_type,
+            "data": audio_bytes
+        }
+        response = self.model.generate_content([prompt, audio_part])
+        return response.text.strip()
+
     def transcribir_y_estructurar(self, texto_o_transcripcion: str) -> str:
         """Transcribe nota de voz y estructura formalmente"""
         prompt = f"""
