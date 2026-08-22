@@ -96,22 +96,35 @@ async def estudiante_recaudacion_callback(update: Update, context: ContextTypes.
     if query:
         await query.answer()
     
+    user_id = update.effective_user.id
     chat_type = update.effective_chat.type
     chat_id = update.effective_chat.id
     db = context.bot_data['db']
 
+    # Si se invoca desde chat privado, buscar el grupo activo donde el estudiante está verificado
     if chat_type == 'private':
-        texto = (
-            "📌 *Consulta de Recaudación en Grupo*\n\n"
-            "Para consultar los datos de pago activo, debes usar el botón o el comando `/recaudacion` **dentro del grupo de tu materia** donde está registrado el bot."
-        )
-        keyboard = [[InlineKeyboardButton("🔙 Volver al menú", callback_data="volver_menu")]]
-        await query.edit_message_text(texto, parse_mode='Markdown', reply_markup=InlineKeyboardMarkup(keyboard))
-        return
+        target_chat_id = None
+        grupos = db.obtener_todos_los_grupos()
+        for g_id, _ in grupos:
+            try:
+                member = await context.bot.get_chat_member(g_id, user_id)
+                if member.status in ['member', 'administrator', 'creator']:
+                    target_chat_id = g_id
+                    break
+            except Exception:
+                continue
+
+        if not target_chat_id:
+            texto = "⚠️ *No se encontró ningún grupo de materia activo registrado para tu cuenta.*"
+            keyboard = [[InlineKeyboardButton("🔙 Volver al menú", callback_data="volver_menu")]]
+            await query.edit_message_text(texto, parse_mode='Markdown', reply_markup=InlineKeyboardMarkup(keyboard))
+            return
+        
+        chat_id = target_chat_id
 
     rec_tuple = db.obtener_recaudacion_activa(chat_id)
     if not rec_tuple:
-        texto = "⚠️ *No hay ninguna recaudación activa en este grupo en este momento.*"
+        texto = "⚠️ *No hay ninguna recaudación activa en tu grupo en este momento.*"
         keyboard = [[InlineKeyboardButton("🔙 Volver al menú", callback_data="volver_menu")]]
     else:
         rec_id, profesor_id, g_id, concepto, monto, banco, cedula, telefono, fecha_limite, activa = rec_tuple[:10]
@@ -134,7 +147,10 @@ async def estudiante_recaudacion_callback(update: Update, context: ContextTypes.
             f"3️⃣ *Teléfono:*\n`{tel_clean}`\n"
             f"4️⃣ *Monto:*\n`{monto_clean}`\n\n"
             f"⏰ *Fecha Límite:* {fecha_limite}\n"
-            f"👥 *Pagos validados:* {total_pagados}"
+            f"👥 *Pagos validados:* {total_pagados}\n\n"
+            f"📌 *INSTRUCCIONES DE PAGO:*\n"
+            f"• 📲 *Pago Móvil:* Envía la captura del comprobante a tu grupo con el texto `/pago`.\n"
+            f"• 💵 *Efectivo:* Ejecuta `/efectivo` en tu grupo si le pagaste en físico al profesor."
         )
         keyboard = [
             [InlineKeyboardButton("📋 Copiar Datos de Pago", callback_data=f"copiar_datos_pago_{rec_id}")],
