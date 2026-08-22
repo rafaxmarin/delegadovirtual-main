@@ -7,7 +7,9 @@ from src.infrastructure.database.factory import get_repository
 from src.presentation.handlers.auth_handlers import start, button_auth, verificar_password, config_api_comando
 from src.presentation.handlers.menu_handlers import (
     menu, volver_menu, cerrar_menu, estudiante_recaudacion_callback,
-    estudiante_guia_pago_callback, estudiante_guia_pregunta_callback
+    estudiante_guia_pago_callback, estudiante_guia_pregunta_callback,
+    estudiante_guia_anuncios_callback, estudiante_guia_material_callback,
+    estudiante_guia_reglamento_callback
 )
 from src.presentation.handlers.grupo_handlers import (
     estado_grupos, detalle_grupo, detectar_agregacion_grupo, manejar_respuesta_grupo,
@@ -108,7 +110,10 @@ def main():
     application.add_handler(CallbackQueryHandler(cerrar_menu, pattern='^menu_cerrar$'))
 
     # CALLBACKS MENÚ DE ESTUDIANTES
+    application.add_handler(CallbackQueryHandler(estudiante_guia_anuncios_callback, pattern='^estudiante_guia_anuncios$'))
+    application.add_handler(CallbackQueryHandler(estudiante_guia_material_callback, pattern='^estudiante_guia_material$'))
     application.add_handler(CallbackQueryHandler(estudiante_recaudacion_callback, pattern='^estudiante_recaudacion$'))
+    application.add_handler(CallbackQueryHandler(estudiante_guia_reglamento_callback, pattern='^estudiante_guia_reglamento$'))
     application.add_handler(CallbackQueryHandler(estudiante_guia_pago_callback, pattern='^estudiante_guia_pago$'))
     application.add_handler(CallbackQueryHandler(estudiante_guia_pregunta_callback, pattern='^estudiante_guia_pregunta$'))
 

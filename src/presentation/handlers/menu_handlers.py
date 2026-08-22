@@ -146,3 +146,45 @@ async def estudiante_guia_pregunta_callback(update: Update, context: ContextType
     )
     keyboard = [[InlineKeyboardButton("🔙 Volver al menú", callback_data="volver_menu")]]
     await query.edit_message_text(guia, parse_mode='Markdown', reply_markup=InlineKeyboardMarkup(keyboard))
+
+async def estudiante_guia_anuncios_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Acción del botón Anuncios del menú de estudiante"""
+    query = update.callback_query
+    if query:
+        await query.answer()
+
+    guia = (
+        "📢 *ANUNCIOS OFICIALES DEL PROFESOR*\n\n"
+        "Los comunicados oficiales, notas de voz estructuradas y avisos del profesor se publican directamente en el chat del grupo.\n\n"
+        "📌 *Todos los anuncios son FIJADOS automáticamente en la parte superior del grupo.* Puedes presionar el mensaje fijado en Telegram para consultar el último anuncio rápidamente."
+    )
+    keyboard = [[InlineKeyboardButton("🔙 Volver al menú", callback_data="volver_menu")]]
+    await query.edit_message_text(guia, parse_mode='Markdown', reply_markup=InlineKeyboardMarkup(keyboard))
+
+async def estudiante_guia_material_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Acción del botón Materiales del menú de estudiante"""
+    query = update.callback_query
+    if query:
+        await query.answer()
+
+    guia = (
+        "📚 *MATERIAL DE ESTUDIO*\n\n"
+        "El profesor comparte guías, PDFs, documentos Word, enlaces y videos de estudio en el grupo de la materia.\n\n"
+        "📌 *Todo el material compartido queda FIJADO en el grupo* para que puedas acceder a él en cualquier momento desde los mensajes anclados del chat."
+    )
+    keyboard = [[InlineKeyboardButton("🔙 Volver al menú", callback_data="volver_menu")]]
+    await query.edit_message_text(guia, parse_mode='Markdown', reply_markup=InlineKeyboardMarkup(keyboard))
+
+async def estudiante_guia_reglamento_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Acción del botón Reglamento del menú de estudiante"""
+    query = update.callback_query
+    if query:
+        await query.answer()
+
+    guia = (
+        "📜 *REGLAMENTO Y NORMAS DEL GRUPO*\n\n"
+        "El profesor establece las normas de convivencia y evaluación de la materia.\n\n"
+        "📌 *El reglamento oficial permanece FIJADO en la parte superior del grupo.* Te invitamos a leerlo para mantener el respeto y cumplir los lineamientos del curso."
+    )
+    keyboard = [[InlineKeyboardButton("🔙 Volver al menú", callback_data="volver_menu")]]
+    await query.edit_message_text(guia, parse_mode='Markdown', reply_markup=InlineKeyboardMarkup(keyboard))

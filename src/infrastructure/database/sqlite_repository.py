@@ -490,6 +490,13 @@ class SQLiteRepository:
         )
         self.conn.commit()
 
+    def es_estudiante_verificado(self, user_id: int) -> bool:
+        self.cursor.execute(
+            'SELECT 1 FROM pendientes_verificacion WHERE user_id = ? AND resuelto = 1',
+            (user_id,)
+        )
+        return self.cursor.fetchone() is not None
+
     def close(self):
         self.conn.close()
 

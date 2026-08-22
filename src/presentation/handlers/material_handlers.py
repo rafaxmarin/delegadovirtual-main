@@ -144,19 +144,26 @@ async def enviar_material(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     try:
         mensaje_completo = f"📚 *MATERIAL DE ESTUDIO*\n\n{mensaje_intro}"
+        msg_enviado = None
         
         if tipo == 'documento':
-            await context.bot.send_document(chat_id, material, caption=mensaje_completo, parse_mode='Markdown')
+            msg_enviado = await context.bot.send_document(chat_id, material, caption=mensaje_completo, parse_mode='Markdown')
         elif tipo == 'foto':
-            await context.bot.send_photo(chat_id, material, caption=mensaje_completo, parse_mode='Markdown')
+            msg_enviado = await context.bot.send_photo(chat_id, material, caption=mensaje_completo, parse_mode='Markdown')
         elif tipo == 'video':
-            await context.bot.send_video(chat_id, material, caption=mensaje_completo, parse_mode='Markdown')
+            msg_enviado = await context.bot.send_video(chat_id, material, caption=mensaje_completo, parse_mode='Markdown')
         elif tipo == 'link':
-            await context.bot.send_message(chat_id, f"{mensaje_completo}\n\n🔗 {material}", parse_mode='Markdown')
+            msg_enviado = await context.bot.send_message(chat_id, f"{mensaje_completo}\n\n🔗 {material}", parse_mode='Markdown')
         elif tipo == 'texto':
-            await context.bot.send_message(chat_id, f"{mensaje_completo}\n\n📖 {material}", parse_mode='Markdown')
+            msg_enviado = await context.bot.send_message(chat_id, f"{mensaje_completo}\n\n📖 {material}", parse_mode='Markdown')
         
-        await query.edit_message_text("✅ Material enviado exitosamente.")
+        if msg_enviado:
+            try:
+                await context.bot.pin_chat_message(chat_id, msg_enviado.message_id)
+            except Exception:
+                pass
+
+        await query.edit_message_text("✅ Material enviado y fijado exitosamente.")
         
         context.user_data.pop('material', None)
         context.user_data.pop('tipo_material', None)

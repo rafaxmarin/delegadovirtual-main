@@ -33,9 +33,18 @@ def get_menu_keyboard() -> InlineKeyboardMarkup:
 
 def get_estudiante_menu_keyboard() -> InlineKeyboardMarkup:
     keyboard = [
-        [InlineKeyboardButton("💸 Consultar Recaudación", callback_data="estudiante_recaudacion")],
-        [InlineKeyboardButton("📷 Cómo subir un Pago", callback_data="estudiante_guia_pago")],
-        [InlineKeyboardButton("❓ Cómo hacer una Pregunta", callback_data="estudiante_guia_pregunta")],
+        [
+            InlineKeyboardButton("📢 Anuncios", callback_data="estudiante_guia_anuncios"),
+            InlineKeyboardButton("📚 Materiales", callback_data="estudiante_guia_material")
+        ],
+        [
+            InlineKeyboardButton("💸 Recaudación", callback_data="estudiante_recaudacion"),
+            InlineKeyboardButton("📜 Reglamento", callback_data="estudiante_guia_reglamento")
+        ],
+        [
+            InlineKeyboardButton("📷 Cómo subir Pago", callback_data="estudiante_guia_pago"),
+            InlineKeyboardButton("❓ Hacer Pregunta", callback_data="estudiante_guia_pregunta")
+        ],
         [InlineKeyboardButton("❌ Cerrar panel", callback_data="menu_cerrar")]
     ]
     return InlineKeyboardMarkup(keyboard)
