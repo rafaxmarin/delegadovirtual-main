@@ -11,7 +11,8 @@ from src.presentation.handlers.menu_handlers import (
 )
 from src.presentation.handlers.grupo_handlers import (
     estado_grupos, detalle_grupo, detectar_agregacion_grupo, manejar_respuesta_grupo,
-    confirmar_desvincular_grupo, ejecutar_desvincular_grupo, solicitar_cedula_nuevo_estudiante
+    confirmar_desvincular_grupo, ejecutar_desvincular_grupo, solicitar_cedula_nuevo_estudiante,
+    confirmar_limpiar_chat, ejecutar_limpiar_chat
 )
 from src.presentation.handlers.recaudacion_handlers import (
     menu_recaudacion, iniciar_recaudacion, procesar_recaudacion, confirmar_recaudacion,
@@ -116,6 +117,8 @@ def main():
     application.add_handler(CallbackQueryHandler(manejar_respuesta_grupo, pattern='^(aceptar_grupo_|rechazar_grupo_)'))
     application.add_handler(CallbackQueryHandler(confirmar_desvincular_grupo, pattern='^desvincular_grupo_'))
     application.add_handler(CallbackQueryHandler(ejecutar_desvincular_grupo, pattern='^confirmar_desvincular_'))
+    application.add_handler(CallbackQueryHandler(confirmar_limpiar_chat, pattern='^limpiar_chat_'))
+    application.add_handler(CallbackQueryHandler(ejecutar_limpiar_chat, pattern='^confirmar_limpiar_chat_exec_'))
 
     # CALLBACKS DE ANUNCIOS
     application.add_handler(CallbackQueryHandler(confirmar_anuncio, pattern='^confirmar_anuncio$'))

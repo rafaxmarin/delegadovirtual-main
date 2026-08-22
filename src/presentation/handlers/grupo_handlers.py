@@ -310,3 +310,106 @@ async def ejecutar_desvincular_grupo(update: Update, context: ContextTypes.DEFAU
         )
     except Exception as e:
         await query.edit_message_text(f"❌ Error al desvincular el grupo: {str(e)}")
+
+async def confirmar_limpiar_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Muestra confirmación antes de limpiar el chat del grupo"""
+    query = update.callback_query
+    await query.answer()
+    db = context.bot_data['db']
+
+    chat_id = int(query.data.replace("limpiar_chat_", ""))
+
+    if not await verificar_pertenencia_grupo(chat_id, query.from_user.id, db, query):
+        return
+
+    grupo = db.obtener_grupo(chat_id)
+    nombre_grupo = grupo[1] if grupo else "el grupo"
+
+    keyboard = [
+        [
+            InlineKeyboardButton("✅ Sí, limpiar chat", callback_data=f"confirmar_limpiar_chat_exec_{chat_id}"),
+            InlineKeyboardButton("❌ Cancelar", callback_data=f"detalle_grupo_{chat_id}")
+        ]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    await query.edit_message_text(
+        f"🧹 *LIMPIEZA DE CHAT GRUPAL*\n\n"
+        f"📚 *Grupo:* {nombre_grupo}\n\n"
+        f"⚠️ ¿Estás seguro de eliminar los mensajes del chat?\n"
+        f"📌 *Los mensajes fijados (anuncios, reglamentos, etc.) NO serán eliminados.*\n\n"
+        f"_Nota: El bot requiere permisos de administrador para borrar mensajes._",
+        parse_mode='Markdown',
+        reply_markup=reply_markup
+    )
+
+async def ejecutar_limpiar_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Ejecuta el borrado masivo de mensajes recientes en el grupo omitiendo los fijados"""
+    query = update.callback_query
+    await query.answer()
+    db = context.bot_data['db']
+
+    chat_id = int(query.data.replace("confirmar_limpiar_chat_exec_", ""))
+
+    if not await verificar_pertenencia_grupo(chat_id, query.from_user.id, db, query):
+        return
+
+    grupo = db.obtener_grupo(chat_id)
+    nombre_grupo = grupo[1] if grupo else "el grupo"
+
+    await query.edit_message_text("⏳ *Iniciando limpieza del chat... Por favor espera.*", parse_mode='Markdown')
+
+    try:
+        # Obtener información del grupo y mensaje fijado
+        chat_info = await context.bot.get_chat(chat_id)
+        pinned_msg_id = chat_info.pinned_message.message_id if chat_info.pinned_message else None
+
+        # Enviar mensaje temporal en el grupo para obtener el ID de mensaje más reciente
+        temp_msg = await context.bot.send_message(
+            chat_id,
+            "🧹 *Limpieza de chat iniciada por el profesor...*",
+            parse_mode='Markdown'
+        )
+        latest_id = temp_msg.message_id
+
+        borrados_count = 0
+        min_id = max(1, latest_id - 200)
+
+        # Iterar desde el mensaje más reciente hacia atrás
+        for msg_id in range(latest_id, min_id, -1):
+            if pinned_msg_id and msg_id == pinned_msg_id:
+                continue  # PROTEGER EL MENSAJE FIJADO
+
+            if msg_id == temp_msg.message_id:
+                continue
+
+            try:
+                await context.bot.delete_message(chat_id=chat_id, message_id=msg_id)
+                borrados_count += 1
+            except Exception:
+                # El mensaje pudo haber sido ya borrado o sobrepasar el límite de tiempo de Telegram
+                pass
+
+        # Eliminar el mensaje temporal
+        try:
+            await context.bot.delete_message(chat_id=chat_id, message_id=temp_msg.message_id)
+        except Exception:
+            pass
+
+        await query.edit_message_text(
+            f"✅ *Limpieza de chat completada*\n\n"
+            f"📚 *Grupo:* {nombre_grupo}\n"
+            f"🗑️ *Mensajes eliminados:* {borrados_count}\n"
+            f"📌 *Mensajes fijados:* Conservados e intactos.",
+            parse_mode='Markdown',
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Volver al grupo", callback_data=f"detalle_grupo_{chat_id}")]])
+        )
+
+    except Exception as e:
+        await query.edit_message_text(
+            f"❌ *Error al limpiar el chat:* {str(e)}\n\n"
+            f"Asegúrate de que el bot sea *Administrador* en el grupo y tenga el permiso para *Eliminar mensajes*.",
+            parse_mode='Markdown',
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Volver", callback_data=f"detalle_grupo_{chat_id}")]])
+        )
+
