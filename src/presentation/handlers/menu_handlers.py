@@ -3,13 +3,31 @@ from telegram.ext import ContextTypes
 from src.presentation.keyboards import get_menu_keyboard, get_estudiante_menu_keyboard
 from src.presentation.handlers.recaudacion_handlers import obtener_codigo_banco, limpiar_cedula, limpiar_telefono
 
+async def es_estudiante_verificado_y_en_grupo(user_id: int, context: ContextTypes.DEFAULT_TYPE) -> bool:
+    """Verifica que el usuario sea un estudiante verificado Y pertenezca activamente a al menos un grupo registrado"""
+    db = context.bot_data['db']
+    
+    if not db.es_estudiante_verificado(user_id):
+        return False
+        
+    grupos = db.obtener_todos_los_grupos()
+    for chat_id, _ in grupos:
+        try:
+            member = await context.bot.get_chat_member(chat_id, user_id)
+            if member.status in ['member', 'administrator', 'creator']:
+                return True
+        except Exception:
+            continue
+            
+    return False
+
 async def menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Maneja el comando /menu y despliega el menú (Profesor o Estudiante Verificado)"""
+    """Maneja el comando /menu y despliega el menú (Profesor o Estudiante Verificado e Integrado en Grupo)"""
     user = update.effective_user
     db = context.bot_data['db']
     
     es_profesor = db.es_profesor_verificado(user.id)
-    es_estudiante = db.es_estudiante_verificado(user.id)
+    es_estudiante_valido = await es_estudiante_verificado_y_en_grupo(user.id, context)
     
     if es_profesor:
         texto_menu = (
@@ -17,7 +35,7 @@ async def menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "Selecciona la función que deseas utilizar:"
         )
         reply_markup = get_menu_keyboard()
-    elif es_estudiante:
+    elif es_estudiante_valido:
         texto_menu = (
             "🎓 *MENÚ DE ESTUDIANTES — Delegado Virtual*\n\n"
             "¡Hola! Selecciona una opción o utiliza los siguientes comandos en tu grupo:\n\n"
@@ -32,8 +50,8 @@ async def menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         texto_menu = (
             "⚠️ *ACCESO RESTRINGIDO*\n\n"
-            "El comando `/menu` está reservado exclusivamente para **profesores** y **estudiantes verificados**.\n\n"
-            "🎓 *Si eres estudiante:* Para verificar tu cuenta y acceder al bot, ingresa al grupo de tu materia mediante el enlace de invitación de tu profesor o presiona el botón *🔐 Verificar Cédula en privado* en tu grupo."
+            "El comando `/menu` está reservado exclusivamente para **profesores** y **estudiantes verificados activos dentro del grupo**.\n\n"
+            "🎓 *Si eres estudiante:* Para acceder al bot debes ingresar al grupo de tu materia y asegurarte de que tu solicitud haya sido APROBADA con tu nombre y apellido de Telegram verificados."
         )
         keyboard = [[InlineKeyboardButton("❌ Cerrar panel", callback_data="menu_cerrar")]]
         reply_markup = InlineKeyboardMarkup(keyboard)
