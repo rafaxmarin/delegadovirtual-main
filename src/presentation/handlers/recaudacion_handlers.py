@@ -1,5 +1,6 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
+from typing import Tuple, Optional, List, Dict, Any
 import json, re, os
 from datetime import datetime
 from src.infrastructure.ai.ai_service import AIService
