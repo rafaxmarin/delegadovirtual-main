@@ -41,7 +41,7 @@ async def menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "¡Hola! Selecciona una opción o utiliza los siguientes comandos en tu grupo:\n\n"
             "💸 *Recaudaciones y Pagos:*\n"
             "• `/recaudacion` — Consulta los datos de la recaudación activa del grupo.\n"
-            "• `/pago` — Valida tu captura de comprobante de pago en el grupo.\n"
+            "• `/pago <referencia> [nombres]` — Reporta tu pago móvil en el grupo.\n"
             "• `/efectivo` — Registra un pago en efectivo al profesor en el grupo.\n\n"
             "❓ *Asesorías y Preguntas:*\n"
             "• `/pregunta [tu duda]` — Envía una duda directamente al buzón del profesor."
@@ -58,26 +58,17 @@ async def menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if update.callback_query:
         try:
-            await update.callback_query.edit_message_text(
-                texto_menu,
-                parse_mode='Markdown',
-                reply_markup=reply_markup
-            )
+            await update.callback_query.edit_message_text(texto_menu, reply_markup=reply_markup, parse_mode='Markdown')
         except Exception:
-            await update.callback_query.message.reply_text(
-                texto_menu,
-                parse_mode='Markdown',
-                reply_markup=reply_markup
-            )
+            pass
     elif update.message:
-        await update.message.reply_text(
-            texto_menu,
-            parse_mode='Markdown',
-            reply_markup=reply_markup
-        )
+        await update.message.reply_text(texto_menu, reply_markup=reply_markup, parse_mode='Markdown')
 
 async def volver_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Vuelve al menú principal desde un callback button y limpia el estado activo"""
+    """Retorna al menú principal para estudiantes o profesores según su rol"""
+    query = update.callback_query
+    if query:
+        await query.answer()
     await menu(update, context)
 
 async def cerrar_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -91,31 +82,32 @@ async def cerrar_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.edit_message_text("✅ Panel cerrado.")
 
 async def estudiante_recaudacion_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Acción del botón Consultar Recaudación del menú de estudiante"""
+    """Acción del botón Recaudación del menú de estudiante"""
     query = update.callback_query
     if query:
         await query.answer()
-    
-    user_id = update.effective_user.id
-    chat_type = update.effective_chat.type
-    chat_id = update.effective_chat.id
-    db = context.bot_data['db']
 
-    # Si se invoca desde chat privado, buscar el grupo activo donde el estudiante está verificado
-    if chat_type == 'private':
-        target_chat_id = None
-        grupos = db.obtener_todos_los_grupos()
-        for g_id, _ in grupos:
-            try:
-                member = await context.bot.get_chat_member(g_id, user_id)
-                if member.status in ['member', 'administrator', 'creator']:
-                    target_chat_id = g_id
-                    break
-            except Exception:
-                continue
+    db = context.bot_data['db']
+    user_id = query.from_user.id
+    
+    # Obtener el chat del grupo al que pertenece el estudiante
+    chat_id = None
+    if update.effective_chat and update.effective_chat.type != 'private':
+        chat_id = update.effective_chat.id
+    else:
+        # Buscar en pendientes de verificación resueltos para identificar su grupo
+        db.cursor.execute('SELECT chat_id FROM pendientes_verificacion WHERE user_id = ? AND resuelto = 1 ORDER BY id DESC LIMIT 1', (user_id,))
+        row = db.cursor.fetchone()
+        target_chat_id = row[0] if row else None
+        
+        # Si no lo encontramos por pendientes, buscar por miembros_telegram
+        if not target_chat_id:
+            db.cursor.execute('SELECT chat_id FROM miembros_telegram WHERE user_id = ? ORDER BY fecha_visto DESC LIMIT 1', (user_id,))
+            row_m = db.cursor.fetchone()
+            target_chat_id = row_m[0] if row_m else None
 
         if not target_chat_id:
-            texto = "⚠️ *No se encontró ningún grupo de materia activo registrado para tu cuenta.*"
+            texto = "⚠️ *No se pudo identificar tu grupo de materia.* Asegúrate de estar dentro del grupo de Telegram."
             keyboard = [[InlineKeyboardButton("🔙 Volver al menú", callback_data="volver_menu")]]
             await query.edit_message_text(texto, parse_mode='Markdown', reply_markup=InlineKeyboardMarkup(keyboard))
             return
@@ -147,10 +139,12 @@ async def estudiante_recaudacion_callback(update: Update, context: ContextTypes.
             f"3️⃣ *Teléfono:*\n`{tel_clean}`\n"
             f"4️⃣ *Monto:*\n`{monto_clean}`\n\n"
             f"⏰ *Fecha Límite:* {fecha_limite}\n"
-            f"👥 *Pagos validados:* {total_pagados}\n\n"
-            f"📌 *INSTRUCCIONES DE PAGO:*\n"
-            f"• 📲 *Pago Móvil:* Envía la captura del comprobante a tu grupo con el texto `/pago`.\n"
-            f"• 💵 *Efectivo:* Ejecuta `/efectivo` en tu grupo si le pagaste en físico al profesor."
+            f"👥 *Pagos registrados:* {total_pagados}\n\n"
+            f"📌 *INSTRUCCIONES DE REGISTRO DE PAGO:*\n"
+            f"• 📲 *Pago Móvil:* Escribe en el grupo `/pago <referencia> [nombres]`.\n"
+            f"  _Ejemplo múltiple:_ `/pago 564654654646564 Alan Brito y Solomeo Paredes`\n"
+            f"  _Ejemplo individual:_ `/pago 564654654646564`\n"
+            f"• 💵 *Efectivo:* Ejecuta `/efectivo` en el grupo si pagaste en físico al profesor."
         )
         keyboard = [
             [InlineKeyboardButton("📋 Copiar Datos de Pago", callback_data=f"copiar_datos_pago_{rec_id}")],
@@ -159,17 +153,22 @@ async def estudiante_recaudacion_callback(update: Update, context: ContextTypes.
     await query.edit_message_text(texto, parse_mode='Markdown', reply_markup=InlineKeyboardMarkup(keyboard))
 
 async def estudiante_guia_pago_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Acción del botón Guía para subir Pago del menú de estudiante"""
+    """Acción del botón Guía para reportar Pago del menú de estudiante"""
     query = update.callback_query
     if query:
         await query.answer()
 
     guia = (
-        "📷 *GUÍA PARA REGISTRAR TU PAGO*\n\n"
-        "1. Entra al grupo de tu clase donde está el bot.\n"
-        "2. *Si pagaste por Pago Móvil:* Envía la captura/imagen del comprobante (o usa `/pago`).\n"
-        "3. *Si pagaste en efectivo al profesor:* Ejecuta el comando `/efectivo` en el grupo.\n"
-        "4. El bot registrará tu pago en la lista en vivo en tiempo real."
+        "💳 *GUÍA PARA REPORTAR TU PAGO*\n\n"
+        "Para registrar tu pago móvil en el grupo de tu materia, usa el comando `/pago` indicando el número de referencia y el/los nombres de los estudiantes:\n\n"
+        "📌 *Ejemplos de uso en el grupo:*\n"
+        "• *Si pagas solo por ti:*\n"
+        "  `/pago 564654654646564`\n"
+        "  o `/pago 564654654646564 Tu Nombre y Apellido`\n\n"
+        "• *Si pagas por varios estudiantes:*\n"
+        "  `/pago 564654654646564 Alan Brito y Solomeo Paredes`\n\n"
+        "💵 *Pago en Efectivo:* Si le pagaste en físico al profesor, ejecuta `/efectivo` en el grupo.\n\n"
+        "✅ El bot registrará el pago y guardará la referencia para la comprobación del profesor."
     )
     keyboard = [[InlineKeyboardButton("🔙 Volver al menú", callback_data="volver_menu")]]
     await query.edit_message_text(guia, parse_mode='Markdown', reply_markup=InlineKeyboardMarkup(keyboard))

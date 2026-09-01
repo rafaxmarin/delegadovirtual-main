@@ -1,9 +1,10 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
-import json, re
+import json, re, os
 from datetime import datetime
 from src.infrastructure.ai.ai_service import AIService
 from src.presentation.auth_utils import verificar_pertenencia_grupo
+from src.infrastructure.documents.pdf_exporter import generar_pdf_reporte_recaudacion
 
 gemini = AIService()
 
@@ -242,9 +243,10 @@ async def enviar_recaudacion(update: Update, context: ContextTypes.DEFAULT_TYPE)
         f"4️⃣ *Monto:*\n`{monto_clean}`\n\n"
         f"⏰ *Fecha Límite:* {datos['fecha_limite']}\n\n"
         f"📌 *INSTRUCCIONES DE REGISTRO DE PAGO:*\n"
-        f"• 📲 *Pago Móvil:* Envía la captura del comprobante a este grupo (o usa el comando `/pago`).\n"
-        f"  La captura debe mostrar: Fecha/hora, titular, referencia, banco destino (*DEBE ser {datos['banco']}*) y monto (Bs. {monto:,.2f}).\n"
-        f"• 💵 *Pago en Efectivo:* Si le pagaste en efectivo al profesor, ejecuta el comando `/efectivo` en este grupo."
+        f"• 📲 *Pago Móvil:* Escribe en este grupo el comando `/pago` con tu número de referencia y nombres:\n"
+        f"  👉 `/pago 564654654646564 Alan Brito y Solomeo Paredes`\n"
+        f"  👉 O si es solo para ti: `/pago 564654654646564`\n"
+        f"• 💵 *Pago en Efectivo:* Si le pagaste en físico al profesor, ejecuta `/efectivo` en este grupo."
     )
     
     keyboard_anuncio = [[InlineKeyboardButton("📋 Copiar Datos de Pago", callback_data=f"copiar_datos_pago_{rec_id}")]]
@@ -257,22 +259,7 @@ async def enviar_recaudacion(update: Update, context: ContextTypes.DEFAULT_TYPE)
     try: await context.bot.pin_chat_message(chat_id, msg_anuncio.message_id)
     except: pass
 
-    # Mensaje de lista en vivo inicial
-    mensaje_lista = (
-        f"📊 *ESTADO DE PAGOS EN VIVO*\n"
-        f"📝 *Concepto:* {datos['concepto']}\n"
-        f"━━━━━━━━━━━━━━━━━━━━\n"
-        f"⏳ *Aún no hay pagos validados.*\n"
-        f"━━━━━━━━━━━━━━━━━━━━\n"
-        f"👥 *Pagados:* 0\n"
-        f"💵 *Total Recaudado:* Bs. 0.00\n"
-        f"⏰ *Fecha Límite:* {datos['fecha_limite']}"
-    )
-    
-    msg_lista = await context.bot.send_message(chat_id, mensaje_lista, parse_mode='Markdown')
-    db.actualizar_mensaje_lista(rec_id, msg_lista.message_id)
-    
-    await query.edit_message_text("✅ Recaudación enviada exitosamente. Se ha iniciado la lista en vivo en el grupo.")
+    await query.edit_message_text("✅ Recaudación enviada y publicada exitosamente en el grupo.")
 
 async def ver_reporte_recaudacion_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Muestra la lista de grupos del profesor para ver su reporte de recaudación"""
@@ -326,8 +313,20 @@ async def ver_reporte_recaudacion_grupo(update: Update, context: ContextTypes.DE
     lineas_pagos = []
     if pagos:
         for p in pagos:
-            ref = f"#{p[3]}" if len(p) > 3 and p[3] else ""
-            lineas_pagos.append(f"• ✅ *{p[0]}* {ref} — {p[1]}")
+            nombre_est = p[0]
+            fecha_p = p[1]
+            ref = f"#{p[3]}" if len(p) > 3 and p[3] else "S/R"
+            rep_nom = p[5] if len(p) > 5 and p[5] else ""
+            rep_ced = p[6] if len(p) > 6 and p[6] else ""
+
+            rep_info = ""
+            if rep_nom and rep_nom.lower() != nombre_est.lower():
+                ced_str = f" (CI: {rep_ced})" if rep_ced else ""
+                rep_info = f" _[Reportó: {rep_nom}{ced_str}]_"
+            elif rep_ced:
+                rep_info = f" _(CI: {rep_ced})_"
+
+            lineas_pagos.append(f"• ✅ *{nombre_est}* — Ref: `{ref}`{rep_info} ({fecha_p})")
         detalle_pagos_str = "\n".join(lineas_pagos)
     else:
         detalle_pagos_str = "⏳ *Ningún pago registrado aún.*"
@@ -345,8 +344,75 @@ async def ver_reporte_recaudacion_grupo(update: Update, context: ContextTypes.DE
         f"{detalle_pagos_str}"
     )
 
-    keyboard = [[InlineKeyboardButton("🔙 Volver a la lista de grupos", callback_data="ver_reporte_recaudacion_menu")]]
+    keyboard = [
+        [InlineKeyboardButton("📄 Descargar Reporte en PDF", callback_data=f"descargar_pdf_rec_{rec_id}")],
+        [InlineKeyboardButton("🔙 Volver a la lista de grupos", callback_data="ver_reporte_recaudacion_menu")]
+    ]
     await query.edit_message_text(reporte_texto, parse_mode='Markdown', reply_markup=InlineKeyboardMarkup(keyboard))
+
+async def descargar_pdf_recaudacion_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Genera y despacha el archivo PDF oficial con la tabla detallada de pagos y referencias bancarias"""
+    query = update.callback_query
+    if not query:
+        return
+
+    await query.answer("📄 Generando documento PDF...")
+
+    rec_id = int(query.data.replace("descargar_pdf_rec_", ""))
+    db = context.bot_data['db']
+
+    # Obtener recaudación
+    db.cursor.execute('SELECT * FROM recaudaciones WHERE id = ?', (rec_id,))
+    rec_tuple = db.cursor.fetchone()
+    if not rec_tuple:
+        await query.message.reply_text("❌ No se encontró la recaudación solicitada.")
+        return
+
+    rec_id, profesor_id, g_id, concepto, monto_unitario, banco, cedula, telefono, fecha_limite, activa = rec_tuple[:10]
+    
+    # Obtener nombre del grupo
+    try:
+        chat_info = await context.bot.get_chat(g_id)
+        nombre_grupo = chat_info.title
+    except Exception:
+        nombre_grupo = f"Grupo ID {g_id}"
+
+    pagos = db.obtener_pagos_recaudacion(rec_id)
+    cant_estudiantes = len(pagos)
+    monto_unitario = float(monto_unitario)
+    total_recaudado = cant_estudiantes * monto_unitario
+    estado_str = "Activa" if activa == 1 else "Finalizada"
+
+    datos_rec = {
+        'concepto': concepto,
+        'nombre_grupo': nombre_grupo,
+        'monto_unitario': monto_unitario,
+        'total_recaudado': total_recaudado,
+        'cant_estudiantes': cant_estudiantes,
+        'banco': banco,
+        'fecha_limite': fecha_limite,
+        'estado': estado_str,
+        'fecha_generacion': datetime.now().strftime("%d/%m/%Y %H:%M")
+    }
+
+    try:
+        pdf_path = generar_pdf_reporte_recaudacion(datos_rec, pagos)
+        filename_clean = re.sub(r'[^a-zA-Z0-9_\-]', '_', concepto)[:30]
+        filename = f"Reporte_Pagos_{filename_clean}.pdf"
+
+        with open(pdf_path, 'rb') as f:
+            await context.bot.send_document(
+                chat_id=query.from_user.id,
+                document=f,
+                filename=filename,
+                caption=f"📄 *Reporte de Recaudación: {concepto}*\n📊 Total de pagos registrados: {cant_estudiantes}\n💰 Monto recaudado: Bs. {total_recaudado:,.2f}",
+                parse_mode='Markdown'
+            )
+        try: os.remove(pdf_path)
+        except: pass
+    except Exception as e:
+        print(f"⚠️ Error generando o enviando PDF de recaudación: {e}")
+        await query.message.reply_text(f"⚠️ Ocurrió un error al generar el PDF: {str(e)}")
 
 async def actualizar_lista_en_vivo(bot, chat_id: int, db, rec_id: int, concepto: str, monto_unitario: float, fecha_limite: str, mensaje_lista_id: int):
     """Actualiza en tiempo real el mensaje de lista en vivo en el grupo o envía uno nuevo si no existe"""
@@ -396,25 +462,91 @@ async def actualizar_lista_en_vivo(bot, chat_id: int, db, rec_id: int, concepto:
         except Exception as e:
             print(f"⚠️ No se pudo publicar nuevo mensaje de lista en vivo: {e}")
 
+def parsear_comando_pago(texto: str) -> Tuple[Optional[str], List[str]]:
+    """
+    Extrae el número de referencia y la lista de nombres de estudiantes de un comando /pago.
+    Ejemplos:
+    /pago 564654654646564 Alan Brito y Solomeo Paredes -> ('564654654646564', ['Alan Brito', 'Solomeo Paredes'])
+    /pago 564654654646564 Alan Brito -> ('564654654646564', ['Alan Brito'])
+    /pago 564654654646564 -> ('564654654646564', [])
+    """
+    if not texto:
+        return None, []
+    
+    t = re.sub(r'^/pago(?:@\w+)?\s*', '', texto.strip(), flags=re.IGNORECASE)
+    if not t:
+        return None, []
+    
+    # Buscar número de referencia (al menos 4 dígitos)
+    match_ref = re.search(r'(?:ref(?:\.|:)?|#)?\s*(\d{4,30})', t, flags=re.IGNORECASE)
+    if not match_ref:
+        return None, []
+    
+    referencia = match_ref.group(1)
+    resto = t[:match_ref.start()] + " " + t[match_ref.end():]
+    resto = resto.strip(' .,-:_')
+    
+    if not resto:
+        return referencia, []
+    
+    # Separar nombres usando ' y ', ' e ', ',', ';', '/' o salto de línea
+    partes = re.split(r'\s*(?:,|;|\/|\n|\s+[yeEY]\s+)\s*', resto)
+    nombres = []
+    for p in partes:
+        p_clean = p.strip(' .,-:_')
+        if p_clean and re.search(r'[a-zA-ZáéíóúÁÉÍÓÚñÑ]', p_clean):
+            nombres.append(p_clean)
+    
+    return referencia, nombres
+
 async def validar_comprobante(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Valida la captura enviada en el grupo (soporta fotos e imágenes enviadas directamente o con el comando /pago)"""
+    """Procesa el comando /pago por referencia de texto o validación con imagen"""
     if not update.message:
         return
     
     chat_type = update.effective_chat.type
     chat_id = update.effective_chat.id
     user = update.effective_user
-    estudiante_nombre = user.full_name or (f"@{user.username}" if user.username else "Estudiante")
+    estudiante_nombre = (user.full_name or (f"@{user.username}" if user.username else "Estudiante")).strip()
 
     # Si se envía por chat privado
     if chat_type == 'private':
         await update.message.reply_text(
-            "📌 *Por favor envía tu comprobante de pago directamente en el grupo de tu materia* donde está el bot para que sea validado y registrado en la lista pública.",
+            "📌 *Por favor reporta tu pago directamente en el grupo de tu materia* donde está el bot usando `/pago <referencia> [nombres]`.",
             parse_mode='Markdown',
             reply_to_message_id=update.message.message_id
         )
         return
 
+    db = context.bot_data['db']
+
+    # Solo procesar si el grupo tiene una recaudación activa
+    rec_tuple = db.obtener_recaudacion_activa(chat_id)
+    if not rec_tuple:
+        await update.message.reply_text(
+            "⚠️ *No hay ninguna recaudación activa en este grupo en este momento.*\n\n"
+            "El profesor aún no ha creado ni publicado un proceso de cobro activo para este grupo.",
+            parse_mode='Markdown',
+            reply_to_message_id=update.message.message_id
+        )
+        return
+    
+    # Extraer campos de recaudación
+    rec_id = rec_tuple[0]
+    profesor_id = rec_tuple[1]
+    concepto = rec_tuple[3]
+    monto_esperado = float(rec_tuple[4])
+    banco_esperado = rec_tuple[5]
+    cedula_esperada = rec_tuple[6]
+    telefono_esperado = rec_tuple[7]
+    fecha_limite = rec_tuple[8]
+
+    # Datos del usuario de Telegram que reporta
+    reportado_por_id = user.id
+    reportado_por_nombre = estudiante_nombre
+    reportado_por_cedula = db.obtener_cedula_usuario(chat_id, user.id, estudiante_nombre) or ""
+
+    # Detectar si hay imagen adjunta o respondida
     photo_file_id = None
     if update.message.photo:
         photo_file_id = update.message.photo[-1].file_id
@@ -434,122 +566,172 @@ async def validar_comprobante(update: Update, context: ContextTypes.DEFAULT_TYPE
             fname = doc.file_name or ""
             if mime.startswith('image/') or fname.lower().endswith(('.png', '.jpg', '.jpeg', '.webp', '.bmp', '.heic')):
                 photo_file_id = doc.file_id
-    
-    if not photo_file_id:
+
+    # CASO 1: Reporte por IMAGEN / CAPTURA (Visión IA de respaldo)
+    if photo_file_id:
+        if db.estudiante_ya_pago(rec_id, user.id, estudiante_nombre):
+            await update.message.reply_text(
+                f"⚠️ *{estudiante_nombre}*, ya tienes un pago verificado para la recaudación *{concepto}*.",
+                parse_mode='Markdown',
+                reply_to_message_id=update.message.message_id
+            )
+            return
+
+        msg_procesando = await update.message.reply_text("🔍 *Analizando comprobante con visión IA...*", parse_mode='Markdown', reply_to_message_id=update.message.message_id)
+
+        try:
+            photo_file = await context.bot.get_file(photo_file_id)
+            image_bytes = await photo_file.download_as_bytearray()
+
+            datos_recaudacion = {
+                "concepto": concepto,
+                "monto": monto_esperado,
+                "banco": banco_esperado,
+                "cedula": cedula_esperada,
+                "telefono": telefono_esperado,
+                "fecha_limite": fecha_limite
+            }
+
+            evaluacion = gemini.validar_comprobante_contra_recaudacion(bytes(image_bytes), datos_recaudacion)
+            await msg_procesando.delete()
+
+            if evaluacion.get('valido'):
+                num_ref = evaluacion.get('numero_verificacion', 'S/R')
+                fecha_pago = evaluacion.get('fecha_pago') or datetime.now().strftime("%d/%m/%Y %H:%M")
+                banco_det = evaluacion.get('banco_detectado', banco_esperado)
+
+                # Registrar pago en DB
+                db.registrar_pago(
+                    recaudacion_id=rec_id,
+                    estudiante_nombre=estudiante_nombre,
+                    fecha_pago=fecha_pago,
+                    estudiante_id=user.id,
+                    numero_verificacion=num_ref,
+                    reportado_por_id=reportado_por_id,
+                    reportado_por_nombre=reportado_por_nombre,
+                    reportado_por_cedula=reportado_por_cedula
+                )
+
+                det_ced = f" (CI: {reportado_por_cedula})" if reportado_por_cedula else ""
+                await update.message.reply_text(
+                    f"✅ *¡PAGO VÁLIDO Y REGISTRADO!*\n\n"
+                    f"👤 *Estudiante:* {estudiante_nombre}{det_ced}\n"
+                    f"🔢 *Ref / Comprobante:* #{num_ref}\n"
+                    f"🏦 *Banco Destino:* {banco_det}\n"
+                    f"💵 *Monto:* Bs. {monto_esperado:,.2f}\n"
+                    f"📅 *Fecha:* {fecha_pago}",
+                    parse_mode='Markdown',
+                    reply_to_message_id=update.message.message_id
+                )
+
+                await verificar_y_enviar_fin_recaudacion(context.bot, chat_id, db, rec_tuple)
+            else:
+                motivo = evaluacion.get('motivo_rechazo', 'La captura no cumple con los requisitos esperados.')
+                banco_det = evaluacion.get('banco_detectado', 'Desconocido')
+
+                await update.message.reply_text(
+                    f"❌ *PAGO NO VÁLIDO / RECHAZADO*\n\n"
+                    f"👤 *Estudiante:* {estudiante_nombre}\n"
+                    f"⚠️ *Motivo:* {motivo}\n"
+                    f"🏦 *Banco Detectado:* {banco_det}\n\n"
+                    f"📌 *Por favor verifica que la captura sea clara y emitida hacia el banco {banco_esperado}.*",
+                    parse_mode='Markdown',
+                    reply_to_message_id=update.message.message_id
+                )
+        except Exception as e:
+            try: await msg_procesando.delete()
+            except: pass
+            await update.message.reply_text(f"⚠️ No se pudo procesar la imagen del comprobante: {str(e)}", reply_to_message_id=update.message.message_id)
+        return
+
+    # CASO 2: Reporte por TEXTO / COMANDO con NÚMERO DE REFERENCIA
+    texto_msg = update.message.text or update.message.caption or ""
+    if not texto_msg and context.args:
+        texto_msg = "/pago " + " ".join(context.args)
+
+    referencia, lista_estudiantes = parsear_comando_pago(texto_msg)
+
+    if not referencia:
         await update.message.reply_text(
-            "📸 *Por favor adjunta la imagen/captura de tu comprobante de pago* al usar el comando `/pago` o responde a la imagen del comprobante con `/pago`.",
+            "📌 *FORMATO DEL COMANDO /pago*\n\n"
+            "Para reportar tu pago móvil, escribe el comando con la referencia y el/los nombres de los estudiantes:\n\n"
+            "👉 `/pago <número de referencia> [nombres]`\n\n"
+            "• *Pago para ti mismo:*\n"
+            "  `/pago 564654654646564`\n"
+            "• *Pago individual con nombre:*\n"
+            "  `/pago 564654654646564 Alan Brito`\n"
+            "• *Pago múltiple:*\n"
+            "  `/pago 564654654646564 Alan Brito y Solomeo Paredes`",
             parse_mode='Markdown',
             reply_to_message_id=update.message.message_id
         )
         return
 
-    print(f"📸 Imagen/Comprobante recibido de {estudiante_nombre} en chat ID: {chat_id}")
+    # Si no se colocaron nombres explícitos, se asigna al propio usuario de Telegram
+    if not lista_estudiantes:
+        lista_estudiantes = [estudiante_nombre]
 
-    db = context.bot_data['db']
+    fecha_pago = datetime.now().strftime("%d/%m/%Y %H:%M")
+    registrados = []
+    ya_pagaron = []
 
-    # Solo procesar si el grupo tiene una recaudación activa
-    rec_tuple = db.obtener_recaudacion_activa(chat_id)
-    if not rec_tuple:
-        print(f"⚠️ El chat {chat_id} no tiene una recaudación activa en la base de datos.")
-        await update.message.reply_text(
-            "⚠️ *No hay ninguna recaudación activa en este grupo en este momento.*\n\n"
-            "El profesor aún no ha creado ni publicado un proceso de cobro activo para este grupo.",
-            parse_mode='Markdown',
-            reply_to_message_id=update.message.message_id
-        )
-        return
-    
-    # Extraer campos de recaudación
-    rec_id = rec_tuple[0]
-    profesor_id = rec_tuple[1]
-    concepto = rec_tuple[3]
-    monto_esperado = float(rec_tuple[4])
-    banco_esperado = rec_tuple[5]
-    cedula_esperada = rec_tuple[6]
-    telefono_esperado = rec_tuple[7]
-    fecha_limite = rec_tuple[8]
-    mensaje_lista_id = rec_tuple[10] if len(rec_tuple) > 10 else None
-
-    # Verificar si el estudiante ya registró un pago para esta recaudación
-    if db.estudiante_ya_pago(rec_id, user.id, estudiante_nombre):
-        await update.message.reply_text(
-            f"⚠️ *{estudiante_nombre}*, ya tienes un pago verificado para la recaudación *{concepto}*.",
-            parse_mode='Markdown',
-            reply_to_message_id=update.message.message_id
-        )
-        return
-
-    msg_procesando = await update.message.reply_text("🔍 *Analizando comprobante con visión IA...*", parse_mode='Markdown', reply_to_message_id=update.message.message_id)
-
-    try:
-        photo_file = await context.bot.get_file(photo_file_id)
-        image_bytes = await photo_file.download_as_bytearray()
-
-        datos_recaudacion = {
-            "concepto": concepto,
-            "monto": monto_esperado,
-            "banco": banco_esperado,
-            "cedula": cedula_esperada,
-            "telefono": telefono_esperado,
-            "fecha_limite": fecha_limite
-        }
-
-        evaluacion = gemini.validar_comprobante_contra_recaudacion(bytes(image_bytes), datos_recaudacion)
-        await msg_procesando.delete()
-
-        if evaluacion.get('valido'):
-            num_ref = evaluacion.get('numero_verificacion', 'S/R')
-            fecha_pago = evaluacion.get('fecha_pago') or datetime.now().strftime("%d/%m/%Y %H:%M")
-            banco_det = evaluacion.get('banco_detectado', banco_esperado)
-
-            # Registrar pago en DB
+    for est_nom in lista_estudiantes:
+        est_id = user.id if (len(lista_estudiantes) == 1 and (est_nom.lower() == estudiante_nombre.lower() or not context.args)) else None
+        
+        if db.estudiante_ya_pago(rec_id, est_id, est_nom):
+            ya_pagaron.append(est_nom)
+        else:
             db.registrar_pago(
                 recaudacion_id=rec_id,
-                estudiante_nombre=estudiante_nombre,
+                estudiante_nombre=est_nom,
                 fecha_pago=fecha_pago,
-                estudiante_id=user.id,
-                numero_verificacion=num_ref
+                estudiante_id=est_id,
+                numero_verificacion=referencia,
+                reportado_por_id=reportado_por_id,
+                reportado_por_nombre=reportado_por_nombre,
+                reportado_por_cedula=reportado_por_cedula
             )
+            registrados.append(est_nom)
 
-            # 1. NOTIFICAR EN EL GRUPO QUE EL PAGO ES VÁLIDO
-            await update.message.reply_text(
-                f"✅ *¡PAGO VÁLIDO Y VERIFICADO!*\n\n"
-                f"👤 *Estudiante:* {estudiante_nombre}\n"
-                f"🔢 *Ref / Comprobante:* #{num_ref}\n"
-                f"🏦 *Banco Destino:* {banco_det}\n"
+    # Armar mensaje de respuesta
+    det_cedula = f" (CI: {reportado_por_cedula})" if reportado_por_cedula else ""
+    msg_resp = []
+
+    if registrados:
+        if len(registrados) == 1:
+            msg_resp.append(
+                f"✅ *¡PAGO REGISTRADO EXITOSAMENTE!*\n\n"
+                f"👤 *Estudiante:* {registrados[0]}\n"
+                f"🔢 *Ref:* #{referencia}\n"
                 f"💵 *Monto:* Bs. {monto_esperado:,.2f}\n"
-                f"📅 *Fecha:* {fecha_pago}",
-                parse_mode='Markdown',
-                reply_to_message_id=update.message.message_id
+                f"📅 *Fecha:* {fecha_pago}\n"
+                f"📩 *Reportado por:* {reportado_por_nombre}{det_cedula}"
             )
-
-            # 2. ACTUALIZAR LISTA EN VIVO EN EL GRUPO
-            await actualizar_lista_en_vivo(
-                context.bot, chat_id, db, rec_id, concepto, monto_esperado, fecha_limite, mensaje_lista_id
-            )
-
-            # 3. VERIFICAR SI YA SE REALIZARON TODOS LOS PAGOS
-            await verificar_y_enviar_fin_recaudacion(context.bot, chat_id, db, rec_tuple)
-
         else:
-            motivo = evaluacion.get('motivo_rechazo', 'La captura no cumple con los requisitos esperados.')
-            banco_det = evaluacion.get('banco_detectado', 'Desconocido')
-
-            # 1. NOTIFICAR EN EL GRUPO QUE EL PAGO NO ES VÁLIDO
-            await update.message.reply_text(
-                f"❌ *PAGO NO VÁLIDO / RECHAZADO*\n\n"
-                f"👤 *Estudiante:* {estudiante_nombre}\n"
-                f"⚠️ *Motivo:* {motivo}\n"
-                f"🏦 *Banco Detectado:* {banco_det}\n\n"
-                f"📌 *Por favor verifica que la captura sea clara y emitida hacia el banco {banco_esperado}.*",
-                parse_mode='Markdown',
-                reply_to_message_id=update.message.message_id
+            lista_noms = "\n".join([f"  • {nom}" for nom in registrados])
+            total_monto = len(registrados) * monto_esperado
+            msg_resp.append(
+                f"✅ *¡PAGO MÚLTIPLE REGISTRADO EXITOSAMENTE!*\n\n"
+                f"👥 *Estudiantes cubiertos ({len(registrados)}):*\n{lista_noms}\n\n"
+                f"🔢 *Ref:* #{referencia}\n"
+                f"💵 *Monto total:* Bs. {total_monto:,.2f} (Bs. {monto_esperado:,.2f} c/u)\n"
+                f"📅 *Fecha:* {fecha_pago}\n"
+                f"📩 *Reportado por:* {reportado_por_nombre}{det_cedula}"
             )
 
-    except Exception as e:
-        try: await msg_procesando.delete()
-        except: pass
-        await update.message.reply_text(f"⚠️ No se pudo procesar la imagen del comprobante: {str(e)}", reply_to_message_id=update.message.message_id)
+    if ya_pagaron:
+        noms_ya = ", ".join(ya_pagaron)
+        msg_resp.append(f"⚠️ *Atención:* {noms_ya} ya tenía(n) un pago previamente registrado en esta recaudación.")
+
+    await update.message.reply_text(
+        "\n\n".join(msg_resp),
+        parse_mode='Markdown',
+        reply_to_message_id=update.message.message_id
+    )
+
+    # Verificar si se completaron los pagos
+    if registrados:
+        await verificar_y_enviar_fin_recaudacion(context.bot, chat_id, db, rec_tuple)
 
 async def enviar_informe_final(bot, db, rec_tuple: tuple, motivo_trigger: str = "Fecha límite alcanzada"):
     """Envía el informe final de recaudación al profesor"""
@@ -569,8 +751,20 @@ async def enviar_informe_final(bot, db, rec_tuple: tuple, motivo_trigger: str = 
     detalle_list = []
     if pagos:
         for p in pagos:
-            ref = f"#{p[3]}" if len(p) > 3 and p[3] else ""
-            detalle_list.append(f"• ✅ {p[0]} {ref} ({p[1]})")
+            nombre_est = p[0]
+            fecha_p = p[1]
+            ref = f"#{p[3]}" if len(p) > 3 and p[3] else "S/R"
+            rep_nom = p[5] if len(p) > 5 and p[5] else ""
+            rep_ced = p[6] if len(p) > 6 and p[6] else ""
+
+            rep_info = ""
+            if rep_nom and rep_nom.lower() != nombre_est.lower():
+                ced_str = f" (CI: {rep_ced})" if rep_ced else ""
+                rep_info = f" [Reportó: {rep_nom}{ced_str}]"
+            elif rep_ced:
+                rep_info = f" (CI: {rep_ced})"
+
+            detalle_list.append(f"• ✅ {nombre_est} — Ref: {ref}{rep_info} ({fecha_p})")
         detalle_str = "\n".join(detalle_list)
     else:
         detalle_str = "Ningún pago registrado."
@@ -591,11 +785,40 @@ async def enviar_informe_final(bot, db, rec_tuple: tuple, motivo_trigger: str = 
     # Marcar recaudación como finalizada
     db.finalizar_recaudacion(rec_id)
 
-    # Enviar al profesor
+    # Enviar informe texto al profesor
     try:
         await bot.send_message(profesor_id, informe, parse_mode='Markdown')
     except Exception as e:
         print(f"⚠️ Error enviando informe final al profesor: {e}")
+
+    # Generar y enviar documento PDF al profesor
+    try:
+        datos_rec = {
+            'concepto': concepto,
+            'nombre_grupo': nombre_grupo,
+            'monto_unitario': monto_unitario,
+            'total_recaudado': total_recaudado,
+            'cant_estudiantes': cant_estudiantes,
+            'banco': banco,
+            'fecha_limite': fecha_limite,
+            'estado': 'Finalizada',
+            'fecha_generacion': datetime.now().strftime("%d/%m/%Y %H:%M")
+        }
+        pdf_path = generar_pdf_reporte_recaudacion(datos_rec, pagos)
+        filename_clean = re.sub(r'[^a-zA-Z0-9_\-]', '_', concepto)[:30]
+        filename = f"Informe_Final_{filename_clean}.pdf"
+        with open(pdf_path, 'rb') as f:
+            await bot.send_document(
+                chat_id=profesor_id,
+                document=f,
+                filename=filename,
+                caption=f"📄 *Documento Oficial en PDF — {concepto}*",
+                parse_mode='Markdown'
+            )
+        try: os.remove(pdf_path)
+        except: pass
+    except Exception as e:
+        print(f"⚠️ Error enviando PDF de informe final: {e}")
 
     # Notificar en el grupo que la recaudación ha finalizado
     try:
@@ -663,7 +886,6 @@ async def consultar_recaudacion_comando(update: Update, context: ContextTypes.DE
             reply_to_message_id=update.message.message_id
         )
         return
-
     rec_id, profesor_id, g_id, concepto, monto, banco, cedula, telefono, fecha_limite, activa = rec_tuple[:10]
     monto = float(monto)
 
@@ -671,6 +893,7 @@ async def consultar_recaudacion_comando(update: Update, context: ContextTypes.DE
     ced_clean = limpiar_cedula(str(cedula))
     tel_clean = limpiar_telefono(str(telefono))
     monto_clean = f"{monto:.2f}"
+    total_pagados = db.contar_pagos(rec_id)
 
     mensaje_info = (
         f"💸 *RECAUDACIÓN ACTIVA DEL GRUPO*\n\n"
@@ -684,8 +907,10 @@ async def consultar_recaudacion_comando(update: Update, context: ContextTypes.DE
         f"⏰ *Fecha Límite:* {fecha_limite}\n"
         f"👥 *Pagos validados hasta ahora:* {total_pagados}\n\n"
         f"📌 *INSTRUCCIONES DE REGISTRO DE PAGO:*\n"
-        f"• 📲 *Pago Móvil:* Envía la captura de tu comprobante a este grupo (o usa `/pago` adjuntando la imagen) para validación por IA.\n"
-        f"• 💵 *Pago en Efectivo:* Si pagaste en efectivo al profesor, ejecuta el comando `/efectivo` en este grupo."
+        f"• 📲 *Pago Móvil:* Escribe en este grupo el comando `/pago` con tu referencia y nombres:\n"
+        f"  👉 `/pago 564654654646564 Alan Brito y Solomeo Paredes`\n"
+        f"  👉 O si es individual: `/pago 564654654646564`\n"
+        f"• 💵 *Pago en Efectivo:* Si pagaste en físico al profesor, ejecuta `/efectivo` en este grupo."
     )
 
     keyboard = [[InlineKeyboardButton("📋 Copiar Datos de Pago", callback_data=f"copiar_datos_pago_{rec_id}")]]
@@ -734,12 +959,8 @@ async def copiar_datos_pago_callback(update: Update, context: ContextTypes.DEFAU
             parse_mode='Markdown',
             reply_to_message_id=query.message.message_id if query.message else None
         )
-    except Exception:
-        await context.bot.send_message(
-            chat_id=update.effective_chat.id,
-            text=msg_copiar,
-            parse_mode='Markdown'
-        )
+    except Exception as e:
+        print(f"⚠️ Error enviando datos copiables de pago: {e}")
 
 async def verificar_y_enviar_fin_recaudacion(bot, chat_id: int, db, rec_tuple: tuple):
     """Verifica si ya pagaron todos los estudiantes del grupo para enviar el informe final al profesor"""
@@ -748,7 +969,6 @@ async def verificar_y_enviar_fin_recaudacion(bot, chat_id: int, db, rec_tuple: t
     try:
         cant_miembros = await bot.get_chat_member_count(chat_id)
         # En grupos de Telegram, los miembros incluyen al bot y al profesor.
-        # Por ende, los estudiantes esperados son cant_miembros - 2 (o al menos 1).
         estudiantes_esperados = max(1, cant_miembros - 2)
     except Exception as e:
         print(f"⚠️ No se pudo obtener la cantidad de miembros del grupo: {e}")
@@ -787,8 +1007,6 @@ async def registrar_pago_efectivo(update: Update, context: ContextTypes.DEFAULT_
     rec_id = rec_tuple[0]
     concepto = rec_tuple[3]
     monto_esperado = float(rec_tuple[4])
-    fecha_limite = rec_tuple[8]
-    mensaje_lista_id = rec_tuple[10] if len(rec_tuple) > 10 else None
 
     # Determinar a qué estudiante se le asigna el pago
     if update.message.reply_to_message and update.message.reply_to_message.from_user:
@@ -813,14 +1031,22 @@ async def registrar_pago_efectivo(update: Update, context: ContextTypes.DEFAULT_
     fecha_pago = datetime.now().strftime("%d/%m/%Y %H:%M")
     num_ref = "EFECTIVO"
 
+    reportado_por_id = user.id
+    reportado_por_nombre = (user.full_name or f"@{user.username}" or "Usuario").strip()
+    reportado_por_cedula = db.obtener_cedula_usuario(chat_id, user.id, reportado_por_nombre) or ""
+
     db.registrar_pago(
         recaudacion_id=rec_id,
         estudiante_nombre=estudiante_nombre,
         fecha_pago=fecha_pago,
         estudiante_id=estudiante_id,
-        numero_verificacion=num_ref
+        numero_verificacion=num_ref,
+        reportado_por_id=reportado_por_id,
+        reportado_por_nombre=reportado_por_nombre,
+        reportado_por_cedula=reportado_por_cedula
     )
 
+    det_ced = f" (CI: {reportado_por_cedula})" if reportado_por_cedula else ""
     await update.message.reply_text(
         f"💵 *¡PAGO EN EFECTIVO REGISTRADO!*\n\n"
         f"👤 *Estudiante:* {estudiante_nombre}\n"

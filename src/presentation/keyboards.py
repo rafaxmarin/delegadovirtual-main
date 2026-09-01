@@ -42,7 +42,7 @@ def get_estudiante_menu_keyboard() -> InlineKeyboardMarkup:
             InlineKeyboardButton("📜 Reglamento", callback_data="estudiante_guia_reglamento")
         ],
         [
-            InlineKeyboardButton("📷 Cómo subir Pago", callback_data="estudiante_guia_pago"),
+            InlineKeyboardButton("💳 Cómo reportar Pago", callback_data="estudiante_guia_pago"),
             InlineKeyboardButton("❓ Hacer Pregunta", callback_data="estudiante_guia_pregunta")
         ],
         [InlineKeyboardButton("❌ Cerrar panel", callback_data="menu_cerrar")]

@@ -214,7 +214,9 @@ class FirebaseRepository:
 
     # --- PAGOS ---
     def registrar_pago(self, recaudacion_id: int, estudiante_nombre: str, fecha_pago: str,
-                       estudiante_id: Optional[int] = None, numero_verificacion: Optional[str] = None):
+                       estudiante_id: Optional[int] = None, numero_verificacion: Optional[str] = None,
+                       reportado_por_id: Optional[int] = None, reportado_por_nombre: Optional[str] = None,
+                       reportado_por_cedula: Optional[str] = None):
         pago_id = int(time.time_ns() // 1000)
         self.db.collection('pagos').document(str(pago_id)).set({
             'id': pago_id,
@@ -223,7 +225,10 @@ class FirebaseRepository:
             'estudiante_nombre': estudiante_nombre or '',
             'numero_verificacion': numero_verificacion or '',
             'fecha_pago': fecha_pago or '',
-            'validado': 1
+            'validado': 1,
+            'reportado_por_id': self._to_int(reportado_por_id) if reportado_por_id is not None else None,
+            'reportado_por_nombre': reportado_por_nombre or '',
+            'reportado_por_cedula': reportado_por_cedula or ''
         })
 
     def estudiante_ya_pago(self, recaudacion_id: int, estudiante_id: Optional[int], estudiante_nombre: str) -> bool:
@@ -262,9 +267,40 @@ class FirebaseRepository:
                     d.get('estudiante_nombre', ''),
                     d.get('fecha_pago', ''),
                     self._to_int(d.get('estudiante_id')) if d.get('estudiante_id') is not None else None,
-                    d.get('numero_verificacion')
+                    d.get('numero_verificacion'),
+                    self._to_int(d.get('reportado_por_id')) if d.get('reportado_por_id') is not None else None,
+                    d.get('reportado_por_nombre', ''),
+                    d.get('reportado_por_cedula', '')
                 ))
         return res
+
+    def obtener_cedula_usuario(self, chat_id: int, user_id: int, nombre_telegram: str = "") -> Optional[str]:
+        """Obtiene la cédula verificada o asociada a un usuario en el grupo en Firebase"""
+        target_uid = self._to_int(user_id)
+        target_chat = self._to_int(chat_id)
+        # 1. Buscar en pendientes_verificacion
+        docs = self.db.collection('pendientes_verificacion').where('user_id', '==', target_uid).where('chat_id', '==', target_chat).where('resuelto', '==', 1).stream()
+        for doc in docs:
+            d = doc.to_dict()
+            nombre_of = d.get('nombre_oficial', '').strip()
+            if nombre_of:
+                estudiantes = self.obtener_estudiantes_grupo(chat_id)
+                for est in estudiantes:
+                    ced, apel, nom, correo = est[:4]
+                    if f"{nom} {apel}".strip() == nombre_of or f"{apel} {nom}".strip() == nombre_of:
+                        return str(ced).strip()
+
+        # 2. Buscar por coincidencia con lista oficial del grupo
+        if nombre_telegram:
+            import re
+            estudiantes = self.obtener_estudiantes_grupo(chat_id)
+            tokens = [t.lower() for t in re.sub(r'[^a-zA-ZáéíóúÁÉÍÓÚñÑ\s]', '', nombre_telegram).split() if len(t) > 2]
+            for est in estudiantes:
+                ced, apel, nom, correo = est[:4]
+                nom_completo = f"{nom} {apel}".lower()
+                if tokens and all(t in nom_completo for t in tokens):
+                    return str(ced).strip()
+        return None
 
     # --- STRIKES ---
     def agregar_strike(self, estudiante_id: int, estudiante_nombre: str, grupo_id: int, motivo: str):

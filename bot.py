@@ -20,7 +20,7 @@ from src.presentation.handlers.recaudacion_handlers import (
     menu_recaudacion, iniciar_recaudacion, procesar_recaudacion, confirmar_recaudacion,
     enviar_recaudacion, validar_comprobante, verificar_fechas_limite_job,
     ver_reporte_recaudacion_menu, ver_reporte_recaudacion_grupo, consultar_recaudacion_comando,
-    registrar_pago_efectivo, copiar_datos_pago_callback
+    registrar_pago_efectivo, copiar_datos_pago_callback, descargar_pdf_recaudacion_callback
 )
 from src.presentation.handlers.minuta_handlers import redactar_minuta, recibir_contenido_minuta, generar_minuta_formato, enviar_minuta_grupo, despachar_minuta
 from src.presentation.handlers.asesoria_handlers import buzon_asesoria, responder_asesoria, ignorar_asesoria, detectar_solicitud_estudiante, enviar_pregunta_asesoria
@@ -142,6 +142,7 @@ def main():
     application.add_handler(CallbackQueryHandler(confirmar_recaudacion, pattern='^confirmar_recaudacion$'))
     application.add_handler(CallbackQueryHandler(enviar_recaudacion, pattern='^enviar_recaudacion_'))
     application.add_handler(CallbackQueryHandler(copiar_datos_pago_callback, pattern='^copiar_datos_pago_'))
+    application.add_handler(CallbackQueryHandler(descargar_pdf_recaudacion_callback, pattern='^descargar_pdf_rec_'))
 
     # CALLBACKS DE MINUTA
     application.add_handler(CallbackQueryHandler(generar_minuta_formato, pattern='^formato_'))

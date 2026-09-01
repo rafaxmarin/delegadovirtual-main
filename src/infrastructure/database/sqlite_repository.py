@@ -60,6 +60,9 @@ class SQLiteRepository:
                 numero_verificacion TEXT,
                 fecha_pago TEXT,
                 validado INTEGER DEFAULT 1,
+                reportado_por_id INTEGER,
+                reportado_por_nombre TEXT,
+                reportado_por_cedula TEXT,
                 FOREIGN KEY (recaudacion_id) REFERENCES recaudaciones(id)
             )
         ''')
@@ -177,6 +180,12 @@ class SQLiteRepository:
                 self.cursor.execute("ALTER TABLE pagos ADD COLUMN estudiante_id INTEGER")
             if 'numero_verificacion' not in cols_pagos:
                 self.cursor.execute("ALTER TABLE pagos ADD COLUMN numero_verificacion TEXT")
+            if 'reportado_por_id' not in cols_pagos:
+                self.cursor.execute("ALTER TABLE pagos ADD COLUMN reportado_por_id INTEGER")
+            if 'reportado_por_nombre' not in cols_pagos:
+                self.cursor.execute("ALTER TABLE pagos ADD COLUMN reportado_por_nombre TEXT")
+            if 'reportado_por_cedula' not in cols_pagos:
+                self.cursor.execute("ALTER TABLE pagos ADD COLUMN reportado_por_cedula TEXT")
 
             cols_pend = [c[1] for c in self.cursor.execute("PRAGMA table_info(pendientes_verificacion)").fetchall()]
             if 'nombre_oficial' not in cols_pend:
@@ -289,11 +298,13 @@ class SQLiteRepository:
     
     # Métodos para pagos
     def registrar_pago(self, recaudacion_id: int, estudiante_nombre: str, fecha_pago: str,
-                       estudiante_id: Optional[int] = None, numero_verificacion: Optional[str] = None):
+                       estudiante_id: Optional[int] = None, numero_verificacion: Optional[str] = None,
+                       reportado_por_id: Optional[int] = None, reportado_por_nombre: Optional[str] = None,
+                       reportado_por_cedula: Optional[str] = None):
         self.cursor.execute(
-            '''INSERT INTO pagos (recaudacion_id, estudiante_id, estudiante_nombre, numero_verificacion, fecha_pago, validado)
-               VALUES (?, ?, ?, ?, ?, 1)''',
-            (recaudacion_id, estudiante_id, estudiante_nombre, numero_verificacion, fecha_pago)
+            '''INSERT INTO pagos (recaudacion_id, estudiante_id, estudiante_nombre, numero_verificacion, fecha_pago, validado, reportado_por_id, reportado_por_nombre, reportado_por_cedula)
+               VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?)''',
+            (recaudacion_id, estudiante_id, estudiante_nombre, numero_verificacion, fecha_pago, reportado_por_id, reportado_por_nombre, reportado_por_cedula)
         )
         self.conn.commit()
 
@@ -318,10 +329,41 @@ class SQLiteRepository:
     
     def obtener_pagos_recaudacion(self, recaudacion_id: int) -> List[Tuple]:
         self.cursor.execute(
-            'SELECT estudiante_nombre, fecha_pago, estudiante_id, numero_verificacion FROM pagos WHERE recaudacion_id = ? ORDER BY id',
+            'SELECT estudiante_nombre, fecha_pago, estudiante_id, numero_verificacion, reportado_por_id, reportado_por_nombre, reportado_por_cedula FROM pagos WHERE recaudacion_id = ? ORDER BY id',
             (recaudacion_id,)
         )
         return self.cursor.fetchall()
+
+    def obtener_cedula_usuario(self, chat_id: int, user_id: int, nombre_telegram: str = "") -> Optional[str]:
+        """Obtiene la cédula verificada o asociada a un usuario en el grupo"""
+        # 1. Buscar en pendientes_verificacion resueltos
+        self.cursor.execute(
+            'SELECT nombre_oficial FROM pendientes_verificacion WHERE user_id = ? AND chat_id = ? AND resuelto = 1 ORDER BY id DESC LIMIT 1',
+            (user_id, chat_id)
+        )
+        row = self.cursor.fetchone()
+        if row and row[0]:
+            nombre_of = row[0].strip()
+            self.cursor.execute(
+                'SELECT cedula FROM estudiantes_grupo WHERE chat_id = ? AND (nombres || " " || apellidos = ? OR apellidos || " " || nombres = ?)',
+                (chat_id, nombre_of, nombre_of)
+            )
+            est_row = self.cursor.fetchone()
+            if est_row and est_row[0]:
+                return str(est_row[0]).strip()
+
+        # 2. Buscar por coincidencia con lista oficial del grupo
+        if nombre_telegram:
+            import re
+            estudiantes = self.obtener_estudiantes_grupo(chat_id)
+            tokens = [t.lower() for t in re.sub(r'[^a-zA-ZáéíóúÁÉÍÓÚñÑ\s]', '', nombre_telegram).split() if len(t) > 2]
+            for est in estudiantes:
+                ced, apel, nom, correo = est[:4]
+                nom_completo = f"{nom} {apel}".lower()
+                if tokens and all(t in nom_completo for t in tokens):
+                    return str(ced).strip()
+
+        return None
     
     # Métodos para strikes
     def agregar_strike(self, estudiante_id: int, estudiante_nombre: str, grupo_id: int, motivo: str):
