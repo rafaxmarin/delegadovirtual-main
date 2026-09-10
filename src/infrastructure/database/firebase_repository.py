@@ -1,3 +1,4 @@
+import base64
 import json
 import os
 import re
@@ -14,15 +15,31 @@ class FirebaseRepository:
         if not firebase_admin._apps:
             cred = None
             if credentials_json and credentials_json.strip():
+                clean_json_str = credentials_json.strip()
+                # Quitar comillas envolventes si las tiene
+                if (clean_json_str.startswith('"') and clean_json_str.endswith('"')) or (clean_json_str.startswith("'") and clean_json_str.endswith("'")):
+                    clean_json_str = clean_json_str[1:-1].strip()
+
+                cred_dict = None
+                # Intentar parsear como JSON directo
                 try:
-                    cred_dict = json.loads(credentials_json)
-                    if isinstance(cred_dict, dict) and 'private_key' in cred_dict:
-                        # Corregir saltos de línea escapados (\n como string literal) comunes en Railway / Render / Heroku
-                        if '\\n' in cred_dict['private_key']:
+                    cred_dict = json.loads(clean_json_str)
+                except Exception:
+                    # Intentar decodificar como base64 por si fue codificado
+                    try:
+                        decoded = base64.b64decode(clean_json_str).decode('utf-8')
+                        cred_dict = json.loads(decoded)
+                    except Exception as e:
+                        print(f"⚠️ Error al parsear FIREBASE_CREDENTIALS_JSON: {e}")
+
+                if cred_dict and isinstance(cred_dict, dict):
+                    try:
+                        if 'private_key' in cred_dict and isinstance(cred_dict['private_key'], str):
+                            # Corregir saltos de línea literales (\n)
                             cred_dict['private_key'] = cred_dict['private_key'].replace('\\n', '\n')
-                    cred = credentials.Certificate(cred_dict)
-                except Exception as e:
-                    print(f"⚠️ Error al parsear FIREBASE_CREDENTIALS_JSON: {e}")
+                        cred = credentials.Certificate(cred_dict)
+                    except Exception as e:
+                        print(f"⚠️ Error al crear Certificate desde FIREBASE_CREDENTIALS_JSON: {e}")
             
             if not cred and credentials_path and os.path.exists(credentials_path):
                 try:
@@ -39,7 +56,7 @@ class FirebaseRepository:
                     except Exception:
                         raise ValueError(
                             "❌ No se configuraron credenciales válidas para Firebase. "
-                            "Define FIREBASE_CREDENTIALS_PATH o FIREBASE_CREDENTIALS_JSON en tu archivo .env"
+                            "Define FIREBASE_CREDENTIALS_PATH o FIREBASE_CREDENTIALS_JSON en tus variables de entorno."
                         )
             
             firebase_admin.initialize_app(cred)
