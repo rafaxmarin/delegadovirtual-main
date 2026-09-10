@@ -33,31 +33,37 @@ class FirebaseRepository:
                         print(f"⚠️ Error al parsear FIREBASE_CREDENTIALS_JSON: {e}")
 
                 if cred_dict and isinstance(cred_dict, dict):
+                    if 'private_key' in cred_dict and isinstance(cred_dict['private_key'], str):
+                        # Corregir saltos de línea literales (\n)
+                        cred_dict['private_key'] = cred_dict['private_key'].replace('\\n', '\n')
                     try:
-                        if 'private_key' in cred_dict and isinstance(cred_dict['private_key'], str):
-                            # Corregir saltos de línea literales (\n)
-                            cred_dict['private_key'] = cred_dict['private_key'].replace('\\n', '\n')
                         cred = credentials.Certificate(cred_dict)
-                        print("🔑 Credenciales de Firebase cargadas correctamente desde FIREBASE_CREDENTIALS_JSON.")
                     except Exception as e:
-                        print(f"⚠️ Error al crear Certificate desde FIREBASE_CREDENTIALS_JSON: {e}")
+                        print(f"Error al crear Certificate desde FIREBASE_CREDENTIALS_JSON: {e}")
+                    else:
+                        print("Credenciales de Firebase cargadas correctamente desde FIREBASE_CREDENTIALS_JSON.")
             
             if not cred and credentials_path and os.path.exists(credentials_path):
                 try:
                     cred = credentials.Certificate(credentials_path)
-                    print(f"🔑 Credenciales de Firebase cargadas desde archivo: {credentials_path}")
                 except Exception as e:
-                    print(f"⚠️ Error al cargar FIREBASE_CREDENTIALS_PATH ({credentials_path}): {e}")
+                    print(f"Error al cargar FIREBASE_CREDENTIALS_PATH ({credentials_path}): {e}")
+                else:
+                    print(f"Credenciales de Firebase cargadas desde archivo: {credentials_path}")
             
             if not cred:
                 if os.path.exists('firebase-credentials.json'):
-                    cred = credentials.Certificate('firebase-credentials.json')
-                    print("🔑 Credenciales de Firebase cargadas desde 'firebase-credentials.json'.")
-                else:
-                    raise ValueError(
-                        "❌ No se configuraron credenciales válidas para Firebase. "
-                        "Asegúrate de configurar la variable FIREBASE_CREDENTIALS_JSON en Railway con el contenido de tu JSON."
-                    )
+                    try:
+                        cred = credentials.Certificate('firebase-credentials.json')
+                        print("Credenciales de Firebase cargadas desde 'firebase-credentials.json'.")
+                    except Exception as e:
+                        print(f"Error al cargar firebase-credentials.json: {e}")
+                
+            if not cred:
+                raise ValueError(
+                    "No se configuraron credenciales válidas para Firebase. "
+                    "Asegúrate de configurar la variable FIREBASE_CREDENTIALS_JSON con el contenido de tu JSON."
+                )
             
             firebase_admin.initialize_app(cred)
         
