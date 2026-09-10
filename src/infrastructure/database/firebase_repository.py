@@ -16,6 +16,10 @@ class FirebaseRepository:
             if credentials_json and credentials_json.strip():
                 try:
                     cred_dict = json.loads(credentials_json)
+                    if isinstance(cred_dict, dict) and 'private_key' in cred_dict:
+                        # Corregir saltos de línea escapados (\n como string literal) comunes en Railway / Render / Heroku
+                        if '\\n' in cred_dict['private_key']:
+                            cred_dict['private_key'] = cred_dict['private_key'].replace('\\n', '\n')
                     cred = credentials.Certificate(cred_dict)
                 except Exception as e:
                     print(f"⚠️ Error al parsear FIREBASE_CREDENTIALS_JSON: {e}")
