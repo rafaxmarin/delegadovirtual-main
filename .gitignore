@@ -2,6 +2,9 @@
 .env
 .env.local
 .env.*.local
+firebase-credentials.json
+*credentials*.json
+service-account*.json
 
 # Entornos virtuales de Python
 .venv/

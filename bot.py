@@ -1,4 +1,14 @@
 import os
+import sys
+
+# Ensure UTF-8 output encoding for Windows terminal
+if sys.platform == "win32":
+    try:
+        sys.stdout.reconfigure(encoding='utf-8')
+        sys.stderr.reconfigure(encoding='utf-8')
+    except Exception:
+        pass
+
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ChatMemberHandler, ChatJoinRequestHandler, filters
 from src.config import Config
@@ -197,8 +207,17 @@ def main():
         application.job_queue.run_repeating(verificar_fechas_limite_job, interval=300, first=15)
         application.job_queue.run_repeating(verificar_pendientes_job, interval=180, first=30)  # Cada 3 min
 
+    # Manejo global de errores (ignora callbacks viejos y reporta excepciones)
+    async def global_error_handler(update, context):
+        if "Query is too old" in str(context.error):
+            return  # Ignorar clics en botones de sesiones anteriores
+        print(f"⚠️ Error no controlado: {context.error}")
+
+    application.add_error_handler(global_error_handler)
+
     print("🚀 Delegado Virtual iniciado exitosamente!")
     application.run_polling(allowed_updates=Update.ALL_TYPES)
 
 if __name__ == '__main__':
     main()
+
