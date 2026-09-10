@@ -38,26 +38,26 @@ class FirebaseRepository:
                             # Corregir saltos de línea literales (\n)
                             cred_dict['private_key'] = cred_dict['private_key'].replace('\\n', '\n')
                         cred = credentials.Certificate(cred_dict)
+                        print("🔑 Credenciales de Firebase cargadas correctamente desde FIREBASE_CREDENTIALS_JSON.")
                     except Exception as e:
                         print(f"⚠️ Error al crear Certificate desde FIREBASE_CREDENTIALS_JSON: {e}")
             
             if not cred and credentials_path and os.path.exists(credentials_path):
                 try:
                     cred = credentials.Certificate(credentials_path)
+                    print(f"🔑 Credenciales de Firebase cargadas desde archivo: {credentials_path}")
                 except Exception as e:
                     print(f"⚠️ Error al cargar FIREBASE_CREDENTIALS_PATH ({credentials_path}): {e}")
             
             if not cred:
                 if os.path.exists('firebase-credentials.json'):
                     cred = credentials.Certificate('firebase-credentials.json')
+                    print("🔑 Credenciales de Firebase cargadas desde 'firebase-credentials.json'.")
                 else:
-                    try:
-                        cred = credentials.ApplicationDefault()
-                    except Exception:
-                        raise ValueError(
-                            "❌ No se configuraron credenciales válidas para Firebase. "
-                            "Define FIREBASE_CREDENTIALS_PATH o FIREBASE_CREDENTIALS_JSON en tus variables de entorno."
-                        )
+                    raise ValueError(
+                        "❌ No se configuraron credenciales válidas para Firebase. "
+                        "Asegúrate de configurar la variable FIREBASE_CREDENTIALS_JSON en Railway con el contenido de tu JSON."
+                    )
             
             firebase_admin.initialize_app(cred)
         
